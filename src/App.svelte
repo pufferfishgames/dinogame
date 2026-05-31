@@ -8,6 +8,7 @@
     startRace,
   } from './game/multiplayer.js'
   import { normalizePlayerName } from './game/player.js'
+  import { getOrCreateSessionPassphrase } from './game/joining.js'
   import { createRunnerState, jump, stepRunner } from './game/runner.js'
   import { passphraseToPrivkey, privkeyToPubkey, randomPassphrase } from './nostr/identity.js'
   import {
@@ -17,10 +18,8 @@
     parseSessionEvent,
     signEvent,
   } from './nostr/events.js'
-  import { fetchBestScores, openSessionRelay, publishEvent } from './nostr/relay.js'
+  import { DEFAULT_RELAYS, fetchBestScores, openSessionRelays, publishEvent } from './nostr/relay.js'
 
-  const RELAY_URL = 'wss://nos.lol'
-  const STORAGE_KEY = 'dinogame.identity.v1'
   const NAME_KEY = 'dinogame.name.v1'
   const BEST_KEY = 'dinogame.best.v1'
   const VIEW_WIDTH = 920
@@ -48,18 +47,18 @@
   let scoreEvents = []
 
   $: competitors = lobby.players
-  $: canStart = joined && competitors.length >= 2 && lobby.phase !== 'countdown'
+  $: canStart = joined && lobby.phase !== 'countdown'
   $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
   $: currentScore = runner.score
-  $: waitingForPlayers = joined && competitors.length < 2
+  $: waitingForPlayers = joined && competitors.length < 2 && lobby.phase === 'idle' && relayStatus === 'connecting'
   $: countdown = lobby.race && lobby.phase === 'countdown'
     ? Math.max(0, Math.ceil((lobby.race.startAt - Date.now()) / 1000))
     : 0
 
   onMount(() => {
     restoreIdentity()
-    playerName = normalizePlayerName(localStorage.getItem(NAME_KEY) || playerName)
-    localBest = Number(localStorage.getItem(BEST_KEY) || 0)
+    playerName = normalizePlayerName(readStoredValue(NAME_KEY) || playerName)
+    localBest = Number(readStoredValue(BEST_KEY) || 0)
     ctx = canvas.getContext('2d')
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
@@ -78,11 +77,11 @@
   })
 
   function restoreIdentity() {
-    let passphrase = localStorage.getItem(STORAGE_KEY)
-    if (!passphrase) {
-      passphrase = randomPassphrase()
-      localStorage.setItem(STORAGE_KEY, passphrase)
-    }
+    const passphrase = getOrCreateSessionPassphrase({
+      sessionStorage: getStorage('sessionStorage'),
+      localStorage: getStorage('localStorage'),
+      createPassphrase: randomPassphrase,
+    })
     privkey = passphraseToPrivkey(passphrase)
     pubkey = privkeyToPubkey(privkey)
   }
@@ -90,7 +89,7 @@
   async function refreshScores() {
     scoreStatus = 'loading'
     try {
-      highScores = await fetchBestScores(RELAY_URL, 10)
+      highScores = await fetchBestScores(DEFAULT_RELAYS, 10)
       scoreStatus = highScores.length ? 'ready' : 'empty'
     } catch {
       highScores = []
@@ -100,7 +99,7 @@
 
   function joinLobby() {
     playerName = normalizePlayerName(playerName)
-    localStorage.setItem(NAME_KEY, playerName)
+    writeStoredValue(NAME_KEY, playerName)
     joined = true
     lobby = recordPlayerUpdate(lobby, localPresence('lobby'), Date.now())
     connectSession()
@@ -108,7 +107,7 @@
 
   function connectSession() {
     closeSession()
-    sessionRelay = openSessionRelay(RELAY_URL, {
+    sessionRelay = openSessionRelays(DEFAULT_RELAYS, {
       onStatus: (status) => {
         relayStatus = status
       },
@@ -238,12 +237,12 @@
 
     if (score > localBest) {
       localBest = score
-      localStorage.setItem(BEST_KEY, String(score))
+      writeStoredValue(BEST_KEY, String(score))
       const event = signEvent(createScoreEvent(pubkey, { name: playerName, score, raceId: lobby.race.id }), privkey)
       scoreEvents = [...scoreEvents, event]
       highScores = getBestScores([...scoreEvents, event, ...highScores.map(scoreToEvent)], 10)
       try {
-        await publishEvent(RELAY_URL, event)
+        await publishEvent(DEFAULT_RELAYS, event)
         refreshScores()
       } catch {
         scoreStatus = 'offline'
@@ -253,6 +252,30 @@
 
   function scoreToEvent(score) {
     return createScoreEvent(score.pubkey, score, { now: score.createdAt || Math.floor(Date.now() / 1000) })
+  }
+
+  function getStorage(name) {
+    try {
+      return globalThis[name]
+    } catch {
+      return null
+    }
+  }
+
+  function readStoredValue(key) {
+    try {
+      return getStorage('localStorage')?.getItem(key) || ''
+    } catch {
+      return ''
+    }
+  }
+
+  function writeStoredValue(key, value) {
+    try {
+      getStorage('localStorage')?.setItem(key, value)
+    } catch {
+      // Safari private browsing can reject storage writes; gameplay continues.
+    }
   }
 
   function resizeCanvas() {
@@ -389,7 +412,7 @@
         <h1>Dino Relay</h1>
       </div>
       <div class="status-strip" aria-label="Relay status">
-        <span class:online={relayStatus === 'connected'}></span>
+        <span class:online={relayStatus === 'connected'} class:local={relayStatus === 'local'}></span>
         {relayStatus}
       </div>
     </div>

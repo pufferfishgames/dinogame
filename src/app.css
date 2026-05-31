@@ -119,6 +119,10 @@ h2 {
   background: #93d0c2;
 }
 
+.status-strip span.local {
+  background: #e0b43c;
+}
+
 .runner-canvas {
   width: 100%;
   height: 100%;

@@ -7,18 +7,26 @@ import {
 } from '../game/multiplayer.js'
 
 describe('multiplayer lobby', () => {
-  it('requires two active players before a race can start', () => {
+  it('allows the start button to launch a single-player race', () => {
     let lobby = createLobbyState()
     lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 0 }, 1000)
 
-    expect(startRace(lobby, 'a', 1000)).toEqual({ lobby, started: false })
-
-    lobby = recordPlayerUpdate(lobby, { pubkey: 'b', name: 'BOB', score: 0 }, 1200)
-    const result = startRace(lobby, 'b', 2000)
+    const result = startRace(lobby, 'a', 1000)
 
     expect(result.started).toBe(true)
     expect(result.lobby.phase).toBe('countdown')
-    expect(result.lobby.race.startedBy).toBe('b')
+    expect(result.lobby.race.startedBy).toBe('a')
+  })
+
+  it('can still enforce a two-player competition minimum', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 0 }, 1000)
+
+    expect(startRace(lobby, 'a', 1000, { minPlayers: 2 })).toEqual({ lobby, started: false })
+
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'b', name: 'BOB', score: 0 }, 1200)
+
+    expect(startRace(lobby, 'b', 2000, { minPlayers: 2 }).started).toBe(true)
   })
 
   it('sorts competitors by score and removes stale players', () => {

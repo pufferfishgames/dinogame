@@ -7,6 +7,20 @@ import {
   parseScoreEvent,
 } from './events.js'
 
+export const DEFAULT_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.primal.net',
+  'wss://relay.nostr.band',
+]
+
+export function normalizeRelayUrls(relayUrls = DEFAULT_RELAYS) {
+  const urls = Array.isArray(relayUrls) ? relayUrls : [relayUrls]
+  return [...new Set(urls
+    .map((url) => String(url ?? '').trim())
+    .filter((url) => /^wss:\/\//i.test(url)))]
+}
+
 export function buildPublishMessage(event) {
   return JSON.stringify(['EVENT', event])
 }
@@ -43,7 +57,15 @@ export function parseRelayMessage(raw) {
   }
 }
 
-export async function publishEvent(relayUrl, event) {
+export async function publishEvent(relayUrls, event) {
+  const urls = normalizeRelayUrls(relayUrls)
+  const results = await Promise.allSettled(urls.map((url) => publishEventToRelay(url, event)))
+  const accepted = results.find((result) => result.status === 'fulfilled')
+  if (accepted) return accepted.value
+  throw new Error('relay publish failed')
+}
+
+function publishEventToRelay(relayUrl, event) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(relayUrl)
     const timeout = setTimeout(() => {
@@ -67,14 +89,23 @@ export async function publishEvent(relayUrl, event) {
   })
 }
 
-export async function fetchBestScores(relayUrl, limit = 10) {
+export async function fetchBestScores(relayUrls, limit = 10) {
+  const urls = normalizeRelayUrls(relayUrls)
+  if (!urls.length) return []
+
+  const results = await Promise.allSettled(urls.map((url) => fetchBestScoresFromRelay(url)))
+  const events = results.flatMap((result) => result.status === 'fulfilled' ? result.value : [])
+  return getBestScores(events, limit)
+}
+
+function fetchBestScoresFromRelay(relayUrl) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(relayUrl)
     const events = []
     const subId = `scores-${Math.random().toString(36).slice(2)}`
     const timeout = setTimeout(() => {
       ws.close()
-      resolve(getBestScores(events, limit))
+      resolve(events)
     }, 4500)
 
     ws.onopen = () => ws.send(buildScoreSubscribeMessage(subId))
@@ -85,7 +116,7 @@ export async function fetchBestScores(relayUrl, limit = 10) {
       } else if (msg.type === 'EOSE') {
         clearTimeout(timeout)
         ws.close()
-        resolve(getBestScores(events, limit))
+        resolve(events)
       }
     }
     ws.onerror = () => {
@@ -96,27 +127,120 @@ export async function fetchBestScores(relayUrl, limit = 10) {
 }
 
 export function openSessionRelay(relayUrl, { onEvent, onOpen, onStatus } = {}) {
-  const ws = new WebSocket(relayUrl)
-  const subId = `session-${Math.random().toString(36).slice(2)}`
+  return openSessionRelays([relayUrl], { onEvent, onOpen, onStatus })
+}
 
-  ws.onopen = () => {
-    onStatus?.('connected')
-    ws.send(buildSessionSubscribeMessage(subId))
-    onOpen?.(ws)
+export function openSessionRelays(
+  relayUrls,
+  { onEvent, onOpen, onStatus } = {},
+  WebSocketImpl = globalThis.WebSocket,
+) {
+  const urls = normalizeRelayUrls(relayUrls)
+  const sockets = []
+  const connected = new Set()
+  let pending = urls.length
+  let closed = false
+
+  if (!WebSocketImpl || !urls.length) {
+    queueMicrotask(() => onStatus?.('local', { connected: 0, total: urls.length }))
+    return createSessionClient(sockets, WebSocketImpl, onStatus)
   }
-  ws.onmessage = (e) => {
-    const msg = parseRelayMessage(e.data)
-    if (msg.type === 'EVENT') onEvent?.(msg.event)
+
+  onStatus?.('connecting', { connected: 0, total: urls.length })
+
+  for (const url of urls) {
+    let ws
+    try {
+      ws = new WebSocketImpl(url)
+    } catch {
+      pending -= 1
+      continue
+    }
+
+    sockets.push(ws)
+    const subId = `session-${Math.random().toString(36).slice(2)}`
+    let settled = false
+
+    const settle = () => {
+      if (settled) return
+      settled = true
+      pending = Math.max(0, pending - 1)
+    }
+
+    ws.onopen = () => {
+      settle()
+      connected.add(ws)
+      ws.send(buildSessionSubscribeMessage(subId))
+      onOpen?.(ws, url)
+      emitSessionStatus()
+    }
+
+    ws.onmessage = (e) => {
+      const msg = parseRelayMessage(e.data)
+      if (msg.type === 'EVENT') onEvent?.(msg.event, url)
+    }
+
+    ws.onerror = () => {
+      settle()
+      emitSessionStatus()
+    }
+
+    ws.onclose = () => {
+      settle()
+      connected.delete(ws)
+      emitSessionStatus()
+    }
   }
-  ws.onerror = () => onStatus?.('error')
-  ws.onclose = () => onStatus?.('offline')
+
+  emitSessionStatus()
 
   return {
     send(event) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(buildPublishMessage(event))
+      const message = buildPublishMessage(event)
+      let sent = 0
+      for (const ws of sockets) {
+        if (isOpen(ws, WebSocketImpl)) {
+          try {
+            ws.send(message)
+            sent += 1
+          } catch {
+            connected.delete(ws)
+          }
+        }
+      }
+      if (!sent && !closed) onStatus?.('local', { connected: connected.size, total: urls.length })
+      return sent
     },
     close() {
-      ws.close()
+      closed = true
+      sockets.forEach((ws) => ws.close())
     },
   }
+
+  function emitSessionStatus() {
+    if (closed) return
+    if (connected.size > 0) {
+      onStatus?.('connected', { connected: connected.size, total: urls.length })
+    } else if (pending === 0) {
+      onStatus?.('local', { connected: 0, total: urls.length })
+    } else {
+      onStatus?.('connecting', { connected: 0, total: urls.length })
+    }
+  }
+}
+
+function createSessionClient(sockets, WebSocketImpl, onStatus) {
+  return {
+    send() {
+      onStatus?.('local', { connected: 0, total: 0 })
+      return 0
+    },
+    close() {
+      sockets.forEach((ws) => ws.close())
+    },
+  }
+}
+
+function isOpen(ws, WebSocketImpl) {
+  return ws.readyState === (WebSocketImpl?.OPEN ?? 1)
 }

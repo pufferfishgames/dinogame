@@ -45,8 +45,8 @@ export function prunePlayers(lobby, now = Date.now(), ttlMs = PLAYER_TTL_MS) {
   }
 }
 
-export function startRace(lobby, starterPubkey, now = Date.now()) {
-  if (lobby.players.length < 2) return { lobby, started: false }
+export function startRace(lobby, starterPubkey, now = Date.now(), { minPlayers = 1 } = {}) {
+  if (lobby.players.length < minPlayers) return { lobby, started: false }
 
   const race = {
     id: `${now}-${String(starterPubkey).slice(0, 10)}`,

@@ -5,7 +5,10 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/dinogame/' : '/',
   plugins: [svelte()],
   test: {
-    environment: 'jsdom',
+    environment: 'node',
+    fileParallelism: false,
     globals: true,
+    isolate: false,
+    maxWorkers: 1,
   },
 }))
