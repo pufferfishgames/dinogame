@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DINO_X,
+  INITIAL_SPEED,
   createRunnerState,
   getRunnerSnapshot,
   isColliding,
@@ -20,7 +21,7 @@ describe('runner simulation', () => {
     const state = stepRunner(createRunnerState({ seed: 1 }), 1)
 
     expect(state.score).toBeGreaterThan(0)
-    expect(state.speed).toBeGreaterThan(360)
+    expect(state.speed).toBeGreaterThan(INITIAL_SPEED)
     expect(state.alive).toBe(true)
   })
 

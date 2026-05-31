@@ -1,14 +1,15 @@
 export const DINO_X = 96
 export const GROUND_Y = 0
+export const INITIAL_SPEED = 240
+export const SPEED_ACCELERATION = 4
+export const FIRST_OBSTACLE_X = 980
 
-const INITIAL_SPEED = 360
-const SPEED_ACCELERATION = 10
 const GRAVITY = 2200
 const JUMP_VELOCITY = -820
 const DINO_WIDTH = 44
 const DINO_HEIGHT = 48
-const MIN_OBSTACLE_GAP = 210
-const MAX_OBSTACLE_GAP = 380
+const MIN_OBSTACLE_GAP = 460
+const MAX_OBSTACLE_GAP = 760
 const TRACK_WIDTH = 920
 
 const OBSTACLE_TYPES = [
@@ -20,7 +21,7 @@ const OBSTACLE_TYPES = [
 
 export function createRunnerState({ seed = 1 } = {}) {
   let randomSeed = seed >>> 0 || 1
-  let nextX = 640
+  let nextX = FIRST_OBSTACLE_X
   const obstacles = []
 
   for (let i = 0; i < 24; i += 1) {
@@ -146,7 +147,7 @@ function generateObstacle(seed, x) {
 
   return {
     seed: random.seed,
-    nextX: x + gap,
+    nextX: x + type.width + gap,
     obstacle: {
       ...type,
       x,
