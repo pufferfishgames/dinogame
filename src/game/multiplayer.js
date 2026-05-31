@@ -63,8 +63,11 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
   const existing = new Map(lobby.players.map((player) => [player.name, player]))
   let previous = findPlayerByPubkey(lobby.players, update.pubkey)
   const previousSeq = previous?.seqByPubkey?.[update.pubkey] ?? previous?.seq ?? 0
+  const previousSeen = previous?.lastSeenByPubkey?.[update.pubkey] ??
+    (previous?.pubkey === update.pubkey ? previous?.lastSeen ?? 0 : 0)
 
   if (seq > 0 && previousSeq >= seq) return lobby
+  if (seq === 0 && previousSeen > now) return lobby
 
   if (previous && previous.name !== name) {
     const nextPrevious = removePubkeyFromPlayer(previous, update.pubkey)
@@ -75,6 +78,7 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
 
   const sameNamePlayer = existing.get(name)
   const mergedWith = sameNamePlayer ?? previous
+  const appliesVisibleUpdate = !mergedWith || now >= (mergedWith.lastSeen ?? 0)
 
   const pubkeys = mergeUnique([...(mergedWith?.pubkeys ?? [mergedWith?.pubkey]), update.pubkey])
   const nextPlayer = {
@@ -85,12 +89,12 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
       jumpY: clampJumpY(update.jumpY),
       lastSeen: now,
       pubkey: update.pubkey,
-    }),
+    }, { appliesVisibleUpdate }),
     name,
-    pubkey: choosePrimaryPubkey(mergedWith, update.pubkey, now),
+    pubkey: appliesVisibleUpdate ? choosePrimaryPubkey(mergedWith, update.pubkey, now) : mergedWith.pubkey,
     pubkeys,
-    state: update.state ?? 'lobby',
-    jumpY: clampJumpY(update.jumpY),
+    state: appliesVisibleUpdate ? update.state ?? 'lobby' : mergedWith.state,
+    jumpY: appliesVisibleUpdate ? clampJumpY(update.jumpY) : mergedWith.jumpY,
     seq,
     seqByPubkey: {
       ...(mergedWith?.seqByPubkey ?? (mergedWith?.pubkey ? { [mergedWith.pubkey]: mergedWith.seq ?? 0 } : {})),
@@ -98,7 +102,7 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
     },
     lastSeenByPubkey: {
       ...(mergedWith?.lastSeenByPubkey ?? (mergedWith?.pubkey ? { [mergedWith.pubkey]: mergedWith.lastSeen ?? now } : {})),
-      [update.pubkey]: now,
+      [update.pubkey]: Math.max(previousSeen, now),
     },
     controlledBy: pubkeys.length,
   }
@@ -111,12 +115,20 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
   }
 }
 
-function mergePlayerProgress(existing, update) {
+function mergePlayerProgress(existing, update, { appliesVisibleUpdate = true } = {}) {
   if (!existing) {
     return {
       score: update.score,
       distance: update.distance,
       lastSeen: update.lastSeen,
+    }
+  }
+
+  if (!appliesVisibleUpdate) {
+    return {
+      score: existing.score,
+      distance: existing.distance,
+      lastSeen: existing.lastSeen,
     }
   }
 

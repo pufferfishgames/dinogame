@@ -112,6 +112,20 @@ describe('multiplayer lobby', () => {
     expect(canStartRace(lobby, 'local')).toBe(true)
   })
 
+  it('does not let stale relay updates blink a newer visible same-name row', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'new-tab', name: 'ALICE', score: 120, distance: 1_200, state: 'racing' }, 2000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'old-tab', name: 'ALICE', score: 20, distance: 200, state: 'lobby' }, 1200)
+
+    expect(lobby.players).toHaveLength(1)
+    expect(lobby.players[0]).toMatchObject({
+      pubkey: 'new-tab',
+      score: 120,
+      distance: 1_200,
+      state: 'racing',
+    })
+  })
+
   it('allows the start button to launch a single-player race', () => {
     let lobby = createLobbyState()
     lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 0 }, 1000)

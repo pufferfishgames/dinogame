@@ -1148,7 +1148,7 @@
         <span>{competitors.length}/10</span>
       </div>
       <ol class="player-list">
-        {#each lobbyDisplay as player}
+        {#each lobbyDisplay as player (player.name)}
           <li class:mine={isLocalPlayer(player)} class:pre-join={player.preJoin}>
             <span>{player.name}</span>
             <strong>{player.score}</strong>
