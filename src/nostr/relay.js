@@ -143,13 +143,14 @@ export function openSessionRelays(
   const connected = new Set()
   let pending = urls.length
   let closed = false
+  let lastStatus = ''
 
   if (!WebSocketImpl || !urls.length) {
-    queueMicrotask(() => onStatus?.('local', { connected: 0, total: urls.length }))
+    queueMicrotask(() => emitStatus('local', { connected: 0, total: urls.length }))
     return createSessionClient(sockets, WebSocketImpl, onStatus)
   }
 
-  onStatus?.('connecting', { connected: 0, total: urls.length })
+  emitStatus('connecting', { connected: 0, total: urls.length })
 
   for (const url of urls) {
     let ws
@@ -223,12 +224,18 @@ export function openSessionRelays(
   function emitSessionStatus() {
     if (closed) return
     if (connected.size > 0) {
-      onStatus?.('connected', { connected: connected.size, total: urls.length })
+      emitStatus('connected', { connected: connected.size, total: urls.length })
     } else if (pending === 0) {
-      onStatus?.('local', { connected: 0, total: urls.length })
+      emitStatus('local', { connected: 0, total: urls.length })
     } else {
-      onStatus?.('connecting', { connected: 0, total: urls.length })
+      emitStatus('connecting', { connected: 0, total: urls.length })
     }
+  }
+
+  function emitStatus(status, details) {
+    if (lastStatus === status) return
+    lastStatus = status
+    onStatus?.(status, details)
   }
 }
 

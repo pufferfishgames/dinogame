@@ -151,9 +151,9 @@ h2 {
   z-index: 20;
   display: grid;
   grid-template-columns: 1fr;
-  width: 100dvw;
-  height: 100dvh;
-  min-height: 100dvh;
+  width: var(--game-vw, 100dvw);
+  height: var(--game-vh, 100dvh);
+  min-height: var(--game-vh, 100dvh);
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -162,8 +162,8 @@ h2 {
 }
 
 .game-shell.race-fullscreen .stage {
-  width: 100dvw;
-  height: 100dvh;
+  width: var(--game-vw, 100dvw);
+  height: var(--game-vh, 100dvh);
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -179,8 +179,8 @@ h2 {
 }
 
 .game-shell.race-fullscreen .runner-canvas {
-  width: 100dvw;
-  height: 100dvh;
+  width: var(--game-vw, 100dvw);
+  height: var(--game-vh, 100dvh);
   aspect-ratio: auto;
   background: #f6efe1;
   touch-action: none;

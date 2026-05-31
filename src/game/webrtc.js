@@ -93,6 +93,7 @@ class RealtimeMesh {
     this.RTCPeerConnectionImpl = RTCPeerConnectionImpl
     this.iceServers = iceServers
     this.peers = new Map()
+    this.lastStatusKey = ''
   }
 
   updatePlayers(players = []) {
@@ -127,6 +128,7 @@ class RealtimeMesh {
     try {
       if (signal.type === 'offer' && signal.description) {
         await peer.pc.setRemoteDescription(signal.description)
+        await this.flushPendingCandidates(peer)
         const answer = await peer.pc.createAnswer()
         await peer.pc.setLocalDescription(answer)
         this.publishSignal({
@@ -136,8 +138,13 @@ class RealtimeMesh {
         })
       } else if (signal.type === 'answer' && signal.description) {
         await peer.pc.setRemoteDescription(signal.description)
+        await this.flushPendingCandidates(peer)
       } else if (signal.type === 'ice' && signal.candidate) {
-        await peer.pc.addIceCandidate(signal.candidate)
+        if (hasRemoteDescription(peer.pc)) {
+          await peer.pc.addIceCandidate(signal.candidate)
+        } else {
+          peer.pendingCandidates.push(signal.candidate)
+        }
       }
     } catch {
       closePeer(peer)
@@ -184,6 +191,7 @@ class RealtimeMesh {
       pc,
       channel: null,
       offerStarted: false,
+      pendingCandidates: [],
     }
 
     pc.onicecandidate = (event) => {
@@ -225,6 +233,13 @@ class RealtimeMesh {
     }
   }
 
+  async flushPendingCandidates(peer) {
+    const candidates = peer.pendingCandidates.splice(0)
+    for (const candidate of candidates) {
+      await peer.pc.addIceCandidate(candidate)
+    }
+  }
+
   setupChannel(peer, channel) {
     peer.channel = channel
     channel.onopen = () => this.emitStatus()
@@ -238,10 +253,11 @@ class RealtimeMesh {
 
   emitStatus() {
     const connected = [...this.peers.values()].filter((peer) => peer.channel?.readyState === 'open').length
-    this.onPeerStatus?.({
-      connected,
-      total: this.peers.size,
-    })
+    const total = this.peers.size
+    const key = `${connected}:${total}`
+    if (key === this.lastStatusKey) return
+    this.lastStatusKey = key
+    this.onPeerStatus?.({ connected, total })
   }
 }
 
@@ -266,6 +282,10 @@ function closePeer(peer) {
   } catch {
     // Ignore broken browser implementations while falling back to relays.
   }
+}
+
+function hasRemoteDescription(pc) {
+  return Boolean(pc?.remoteDescription || pc?.currentRemoteDescription)
 }
 
 function clampJumpY(value) {

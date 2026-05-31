@@ -67,4 +67,18 @@ describe('remote player sprites', () => {
     expect(jumping.y).toBeLessThan(grounded.y)
     expect(jumping.jumpY).toBe(-84)
   })
+
+  it('does not render players that are far outside the current camera view', () => {
+    const sprites = buildRemotePlayerSprites({
+      players: [
+        { pubkey: 'near', name: 'NEAR', score: 100, distance: 1_060, state: 'racing' },
+        { pubkey: 'gone', name: 'GONE', score: 100, distance: 2_400, state: 'racing' },
+      ],
+      localPubkey: 'local',
+      localScore: 100,
+      localDistance: 1_000,
+    })
+
+    expect(sprites.map((sprite) => sprite.pubkey)).toEqual(['near'])
+  })
 })

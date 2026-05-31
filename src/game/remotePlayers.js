@@ -14,15 +14,18 @@ export function buildRemotePlayerSprites({
   trackWidth = TRACK_WIDTH,
 } = {}) {
   const localProgress = normalizeDistance(localDistance, localScore)
+  const hasLocalDistance = Number.isFinite(Number(localDistance))
 
   return [...(players ?? [])]
     .filter((player) => player?.pubkey && player.pubkey !== localPubkey)
     .map((player, index) => {
       const score = Math.max(0, Math.floor(Number(player.score) || 0))
+      const hasExactDistance = hasLocalDistance || Number.isFinite(Number(player.distance))
       const distance = normalizeDistance(player.distance, score)
       const progressDelta = distance - localProgress
       const laneOffset = LANE_OFFSETS[index % LANE_OFFSETS.length]
       const jumpY = clampJumpY(player.jumpY)
+      const x = DINO_X + progressDelta
 
       return {
         pubkey: player.pubkey,
@@ -30,13 +33,18 @@ export function buildRemotePlayerSprites({
         score,
         distance,
         state: player.state ?? 'lobby',
-        x: clamp(DINO_X + progressDelta, 24, trackWidth - REMOTE_DINO_WIDTH - 20),
+        hasExactDistance,
+        x: hasExactDistance ? x : clamp(x, 24, trackWidth - REMOTE_DINO_WIDTH - 20),
         y: BASE_Y + laneOffset + jumpY,
         jumpY,
         width: REMOTE_DINO_WIDTH,
         height: 42,
       }
     })
+    .filter((sprite) =>
+      !sprite.hasExactDistance ||
+      (sprite.x + sprite.width >= 0 && sprite.x <= trackWidth),
+    )
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
       if (b.distance !== a.distance) return b.distance - a.distance

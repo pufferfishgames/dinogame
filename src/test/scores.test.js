@@ -37,6 +37,19 @@ describe('Nostr score events', () => {
     ])
   })
 
+  it('deduplicates total scores by display name', () => {
+    const events = [
+      createScoreEvent('a', { name: 'NIKOLAI', score: 300 }, { now: 10 }),
+      createScoreEvent('b', { name: 'NIKOLAI', score: 500 }, { now: 11 }),
+      createScoreEvent('c', { name: 'CARA', score: 450 }, { now: 12 }),
+    ]
+
+    expect(getTotalScores(events).map((score) => [score.name, score.score])).toEqual([
+      ['NIKOLAI', 500],
+      ['CARA', 450],
+    ])
+  })
+
   it('records blank score names with the playable fallback name', () => {
     const event = createScoreEvent('a', { name: '', score: 100 }, { now: 10 })
 

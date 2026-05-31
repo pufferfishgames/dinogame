@@ -103,4 +103,45 @@ describe('relay message helpers', () => {
       ['EVENT', { id: 'event' }],
     ])
   })
+
+  it('emits aggregate session status only when the visible state changes', () => {
+    const statuses = []
+
+    class FakeWebSocket {
+      static OPEN = 1
+      static instances = []
+
+      constructor(url) {
+        this.url = url
+        this.readyState = 0
+        this.sent = []
+        FakeWebSocket.instances.push(this)
+      }
+
+      open() {
+        this.readyState = FakeWebSocket.OPEN
+        this.onopen?.()
+      }
+
+      send(message) {
+        this.sent.push(JSON.parse(message))
+      }
+
+      close() {
+        this.readyState = 3
+        this.onclose?.()
+      }
+    }
+
+    openSessionRelays(['wss://a.example', 'wss://b.example'], {
+      onStatus: (status) => statuses.push(status),
+    }, FakeWebSocket)
+
+    expect(statuses).toEqual(['connecting'])
+
+    FakeWebSocket.instances[0].open()
+    FakeWebSocket.instances[1].open()
+
+    expect(statuses).toEqual(['connecting', 'connected'])
+  })
 })

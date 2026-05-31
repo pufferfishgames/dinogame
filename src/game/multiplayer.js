@@ -58,6 +58,12 @@ export function canFinalizeRace(
 export function recordPlayerUpdate(lobby, update, now = Date.now()) {
   if (!update?.pubkey) return lobby
   const score = Math.max(0, Math.floor(Number(update.score) || 0))
+  const seq = Math.max(0, Math.floor(Number(update.seq) || 0))
+  const existing = new Map(lobby.players.map((player) => [player.pubkey, player]))
+  const previous = existing.get(update.pubkey)
+  const previousSeq = previous?.seq ?? 0
+
+  if (seq > 0 && previousSeq >= seq) return lobby
 
   const nextPlayer = {
     pubkey: update.pubkey,
@@ -66,10 +72,10 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
     distance: normalizeDistance(update.distance, score),
     state: update.state ?? 'lobby',
     jumpY: clampJumpY(update.jumpY),
+    seq: Math.max(previousSeq, seq),
     lastSeen: now,
   }
 
-  const existing = new Map(lobby.players.map((player) => [player.pubkey, player]))
   existing.set(nextPlayer.pubkey, { ...existing.get(nextPlayer.pubkey), ...nextPlayer })
 
   return {

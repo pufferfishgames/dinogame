@@ -37,8 +37,13 @@ describe('mobile layout css', () => {
   it('has an in-app fullscreen race mode that works in any orientation', () => {
     expect(app).toContain('requestFullscreen')
     expect(app).toContain('class:race-fullscreen')
+    expect(app).toContain('visualViewport')
+    expect(app).toContain('orientationchange')
+    expect(app).toContain('scheduleResizeCanvas')
+    expect(app).toContain('Math.max(canvas.width / VIEW_WIDTH')
     expect(css).toContain('.game-shell.race-fullscreen')
     expect(css).toContain('100dvh')
+    expect(css).toContain('--game-vh')
     expect(css).toContain('touch-action: none')
   })
 

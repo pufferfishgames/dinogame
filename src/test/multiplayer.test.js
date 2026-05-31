@@ -43,6 +43,17 @@ describe('multiplayer lobby', () => {
     ])
   })
 
+  it('ignores stale realtime sequence updates', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 100, distance: 1_050, seq: 8 }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 100, distance: 1_010, seq: 7 }, 1010)
+
+    expect(lobby.players[0]).toMatchObject({
+      distance: 1_050,
+      seq: 8,
+    })
+  })
+
   it('allows the start button to launch a single-player race', () => {
     let lobby = createLobbyState()
     lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 0 }, 1000)

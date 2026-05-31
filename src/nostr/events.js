@@ -129,7 +129,20 @@ export function getTotalScores(events, limit = 10) {
     }
   }
 
-  return [...latestByPubkey.values()]
+  const bestByName = new Map()
+
+  for (const score of latestByPubkey.values()) {
+    const current = bestByName.get(score.name)
+    if (
+      !current ||
+      score.score > current.score ||
+      (score.score === current.score && score.createdAt >= current.createdAt)
+    ) {
+      bestByName.set(score.name, score)
+    }
+  }
+
+  return [...bestByName.values()]
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
       return b.createdAt - a.createdAt

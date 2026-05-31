@@ -46,6 +46,7 @@
   let ctx
   let frame = 0
   let lastFrame = 0
+  let viewportResizeTimers = []
   let raceFullscreen = false
   let joined = false
   let playerName = ''
@@ -66,6 +67,7 @@
   let lastRealtimePublish = 0
   let localFinishedAt = 0
   let scoreEvents = []
+  let seenRelayEventIds = new Set()
   let realtimeSeq = 0
   let realtimePeers = 0
 
@@ -99,8 +101,11 @@
     localTotal = readStoredNumber(TOTAL_KEY)
     joinOnlinePlayer()
     ctx = canvas.getContext('2d')
-    resizeCanvas()
-    window.addEventListener('resize', resizeCanvas)
+    scheduleResizeCanvas()
+    window.addEventListener('resize', scheduleResizeCanvas)
+    window.addEventListener('orientationchange', scheduleResizeCanvas)
+    window.visualViewport?.addEventListener('resize', scheduleResizeCanvas)
+    window.visualViewport?.addEventListener('scroll', scheduleResizeCanvas)
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
     window.addEventListener('keydown', handleKeydown)
@@ -110,7 +115,11 @@
 
     return () => {
       cancelAnimationFrame(frame)
-      window.removeEventListener('resize', resizeCanvas)
+      clearViewportResizeTimers()
+      window.removeEventListener('resize', scheduleResizeCanvas)
+      window.removeEventListener('orientationchange', scheduleResizeCanvas)
+      window.visualViewport?.removeEventListener('resize', scheduleResizeCanvas)
+      window.visualViewport?.removeEventListener('scroll', scheduleResizeCanvas)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
       window.removeEventListener('keydown', handleKeydown)
@@ -163,7 +172,7 @@
     closeSession()
     sessionRelay = openSessionRelays(DEFAULT_RELAYS, {
       onStatus: (status) => {
-        relayStatus = status
+        if (relayStatus !== status) relayStatus = status
       },
       onOpen: () => {
         publishPresence('lobby')
@@ -191,6 +200,8 @@
   }
 
   function handleSessionEvent(event) {
+    if (hasSeenRelayEvent(event)) return
+
     const signal = parseSignalEvent(event)
     if (signal) {
       realtime?.handleSignal(signal)
@@ -198,7 +209,7 @@
     }
 
     const update = parseSessionEvent(event)
-    if (!update) return
+    if (!update || update.pubkey === pubkey) return
 
     if (update.type === 'start' && update.race) {
       applyIncomingRace(update.race)
@@ -206,12 +217,27 @@
 
     const existing = lobby.players.find((p) => p.pubkey === update.pubkey)
     const isPeerConnected = realtime?.isPeerConnected(update.pubkey) ?? false
-    lobby = recordPlayerUpdate(
+    const nextLobby = recordPlayerUpdate(
       lobby,
       mergeNostrUpdate(existing, update, { isPeerConnected }),
       (update.createdAt || Math.floor(Date.now() / 1000)) * 1000,
     )
-    realtime?.updatePlayers(lobby.players)
+    if (nextLobby !== lobby) {
+      lobby = nextLobby
+      realtime?.updatePlayers(lobby.players)
+    }
+  }
+
+  function hasSeenRelayEvent(event) {
+    const id = event?.id
+    if (!id) return false
+    if (seenRelayEventIds.has(id)) return true
+
+    seenRelayEventIds.add(id)
+    if (seenRelayEventIds.size > 500) {
+      seenRelayEventIds.delete(seenRelayEventIds.values().next().value)
+    }
+    return false
   }
 
   function openRealtime() {
@@ -221,7 +247,7 @@
       publishSignal,
       onMessage: handleRealtimeMessage,
       onPeerStatus: (status) => {
-        realtimePeers = status.connected
+        if (realtimePeers !== status.connected) realtimePeers = status.connected
       },
     })
     realtime.updatePlayers(lobby.players)
@@ -236,8 +262,11 @@
   function handleRealtimeMessage(update) {
     if (!update?.pubkey || update.pubkey === pubkey) return
     if (update.raceId && lobby.race?.id && update.raceId !== lobby.race.id) return
-    lobby = recordPlayerUpdate(lobby, update, Date.now())
-    realtime?.updatePlayers(lobby.players)
+    const nextLobby = recordPlayerUpdate(lobby, update, Date.now())
+    if (nextLobby !== lobby) {
+      lobby = nextLobby
+      realtime?.updatePlayers(lobby.players)
+    }
   }
 
   function beginRace() {
@@ -428,13 +457,13 @@
 
   function enterRaceFullscreen({ requestBrowserFullscreen = false } = {}) {
     raceFullscreen = true
-    window.setTimeout(resizeCanvas, 0)
+    scheduleResizeCanvas()
 
     if (!requestBrowserFullscreen || !gameShell) return
 
     const request = gameShell.requestFullscreen ?? gameShell.webkitRequestFullscreen
     try {
-      request?.call(gameShell)
+      request?.call(gameShell)?.catch?.(() => {})
     } catch {
       // CSS fullscreen remains active when mobile browsers reject Fullscreen API calls.
     }
@@ -446,19 +475,43 @@
     if (fullscreenElement === gameShell) {
       const exit = document.exitFullscreen ?? document.webkitExitFullscreen
       try {
-        exit?.call(document)
+        exit?.call(document)?.catch?.(() => {})
       } catch {
         // The browser may already be leaving fullscreen.
       }
     }
-    window.setTimeout(resizeCanvas, 0)
+    scheduleResizeCanvas()
   }
 
   function handleFullscreenChange() {
     if (!document.fullscreenElement && !document.webkitFullscreenElement && runner.finished) {
       raceFullscreen = false
-      window.setTimeout(resizeCanvas, 0)
+      scheduleResizeCanvas()
     }
+  }
+
+  function scheduleResizeCanvas() {
+    updateViewportSize()
+    clearViewportResizeTimers()
+    for (const delay of [0, 60, 180, 360]) {
+      viewportResizeTimers.push(window.setTimeout(() => {
+        updateViewportSize()
+        resizeCanvas()
+      }, delay))
+    }
+  }
+
+  function clearViewportResizeTimers() {
+    for (const timer of viewportResizeTimers) window.clearTimeout(timer)
+    viewportResizeTimers = []
+  }
+
+  function updateViewportSize() {
+    const viewport = window.visualViewport
+    const width = Math.max(1, Math.floor(viewport?.width ?? window.innerWidth ?? VIEW_WIDTH))
+    const height = Math.max(1, Math.floor(viewport?.height ?? window.innerHeight ?? VIEW_HEIGHT))
+    document.documentElement.style.setProperty('--game-vw', `${width}px`)
+    document.documentElement.style.setProperty('--game-vh', `${height}px`)
   }
 
   function resizeCanvas() {
@@ -472,9 +525,7 @@
 
   function draw() {
     if (!ctx) return
-    const scale = Math.min(canvas.width / VIEW_WIDTH, canvas.height / VIEW_HEIGHT)
-    const offsetX = (canvas.width - VIEW_WIDTH * scale) / 2
-    const offsetY = (canvas.height - VIEW_HEIGHT * scale) / 2
+    const { scale, offsetX, offsetY } = canvasTransform()
 
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.fillStyle = '#f6efe1'
@@ -488,6 +539,29 @@
     drawDino()
     drawRankings()
     drawHud()
+  }
+
+  function canvasTransform() {
+    if (!raceFullscreen) {
+      const scale = Math.min(canvas.width / VIEW_WIDTH, canvas.height / VIEW_HEIGHT)
+      return {
+        scale,
+        offsetX: (canvas.width - VIEW_WIDTH * scale) / 2,
+        offsetY: (canvas.height - VIEW_HEIGHT * scale) / 2,
+      }
+    }
+
+    const scale = Math.max(canvas.width / VIEW_WIDTH, canvas.height / VIEW_HEIGHT)
+    const minX = Math.min(0, canvas.width - VIEW_WIDTH * scale)
+    const minY = Math.min(0, canvas.height - VIEW_HEIGHT * scale)
+    const targetDinoX = canvas.width * 0.18
+    const targetGroundY = canvas.height * 0.82
+
+    return {
+      scale,
+      offsetX: clamp(targetDinoX - 96 * scale, minX, 0),
+      offsetY: clamp(targetGroundY - GROUND * scale, minY, 0),
+    }
   }
 
   function drawSky() {
@@ -1009,6 +1083,10 @@
     ctx.textAlign = 'center'
     ctx.fillText(text, VIEW_WIDTH / 2, y)
     ctx.textAlign = 'left'
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value))
   }
 </script>
 

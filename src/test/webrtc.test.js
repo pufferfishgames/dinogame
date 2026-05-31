@@ -137,6 +137,62 @@ describe('WebRTC realtime helpers', () => {
     expect(mesh.isPeerConnected('a')).toBe(true)
   })
 
+  it('buffers ICE candidates that arrive before the remote description', async () => {
+    class FakePeerConnection {
+      constructor() {
+        this.remoteDescription = null
+        this.addedCandidates = []
+      }
+
+      async setRemoteDescription(description) {
+        this.remoteDescription = description
+      }
+
+      async createAnswer() {
+        return { type: 'answer', sdp: 'answer-sdp' }
+      }
+
+      async setLocalDescription(description) {
+        this.localDescription = description
+      }
+
+      async addIceCandidate(candidate) {
+        if (!this.remoteDescription) throw new Error('remote description missing')
+        this.addedCandidates.push(candidate)
+      }
+
+      close() {
+        this.closed = true
+      }
+    }
+
+    const mesh = createRealtimeMesh({
+      localPubkey: 'b',
+      publishSignal() {},
+      RTCPeerConnectionImpl: FakePeerConnection,
+    })
+
+    await mesh.handleSignal({
+      pubkey: 'a',
+      to: 'b',
+      type: 'ice',
+      candidate: { candidate: 'early' },
+    })
+
+    const peer = mesh.peers.get('a')
+    expect(peer.pc.closed).not.toBe(true)
+    expect(peer.pc.addedCandidates).toEqual([])
+
+    await mesh.handleSignal({
+      pubkey: 'a',
+      to: 'b',
+      type: 'offer',
+      description: { type: 'offer', sdp: 'offer-sdp' },
+    })
+
+    expect(peer.pc.addedCandidates).toEqual([{ candidate: 'early' }])
+  })
+
   it('applies remote data channel messages to the owning peer pubkey', () => {
     const messages = []
 
