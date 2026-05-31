@@ -7,6 +7,7 @@ export const REALTIME_CHANNEL = 'dinogame-state-v1'
 const DEFAULT_ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
 ]
+const MAX_REMOTE_SPEED = 1800
 
 export function shouldOfferConnection(localPubkey, remotePubkey) {
   const local = String(localPubkey ?? '')
@@ -301,7 +302,7 @@ function clampJumpY(value) {
 
 function normalizeSpeed(speed) {
   const value = Number(speed)
-  return Number.isFinite(value) ? Math.max(0, Math.min(900, value)) : 0
+  return Number.isFinite(value) ? Math.max(0, Math.min(MAX_REMOTE_SPEED, value)) : 0
 }
 
 function normalizeDistance(distance, score = 0) {

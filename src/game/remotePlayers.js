@@ -6,7 +6,10 @@ const REMOTE_DINO_WIDTH = 38
 const TRACK_WIDTH = 920
 const BASE_Y = 238
 const LANE_OFFSETS = [0, -24, 20, -42, 38, -60, 56]
-const MAX_PREDICTION_MS = 450
+const MAX_PREDICTION_MS = 900
+const SMALL_CORRECTION_SCREEN_RATIO = 1 / 20
+const SMOOTH_CORRECTION_SECONDS = 0.22
+const MAX_REMOTE_SPEED = 1800
 
 export function buildRemotePlayerSprites({
   players,
@@ -17,13 +20,15 @@ export function buildRemotePlayerSprites({
   localElapsed,
   trackWidth = TRACK_WIDTH,
   now = Date.now(),
+  smoothingState,
 } = {}) {
   const localProgress = normalizeDistance(localDistance, localScore)
   const hasLocalDistance = Number.isFinite(Number(localDistance))
   const localElapsedValue = normalizeElapsed(localElapsed)
   const normalizedLocalName = normalizePlayerName(localName)
+  const activeSmoothingKeys = new Set()
 
-  return [...(players ?? [])]
+  const sprites = [...(players ?? [])]
     .filter((player) =>
       player?.pubkey &&
       !playerIncludesPubkey(player, localPubkey) &&
@@ -33,11 +38,20 @@ export function buildRemotePlayerSprites({
       const score = Math.max(0, Math.floor(Number(player.score) || 0))
       const hasExactDistance = hasLocalDistance || Number.isFinite(Number(player.distance))
       const observedDistance = normalizeDistance(player.distance, score)
-      const distance = predictDistance(player, {
+      const projectedDistance = predictDistance(player, {
         observedDistance,
         score,
         localElapsed: localElapsedValue,
         now,
+      })
+      const smoothingKey = normalizePlayerName(player.name)
+      activeSmoothingKeys.add(smoothingKey)
+      const distance = smoothDistance(smoothingState, smoothingKey, {
+        targetDistance: projectedDistance,
+        baseVelocity: normalizeSpeed(player.distanceVelocity ?? player.speed),
+        state: player.state ?? 'lobby',
+        now,
+        trackWidth,
       })
       const progressDelta = distance - localProgress
       const laneOffset = LANE_OFFSETS[index % LANE_OFFSETS.length]
@@ -53,6 +67,7 @@ export function buildRemotePlayerSprites({
         score,
         distance,
         observedDistance,
+        projectedDistance,
         state: player.state ?? 'lobby',
         hasExactDistance,
         x: hasExactDistance ? x : clamp(x, 24, trackWidth - REMOTE_DINO_WIDTH - 20),
@@ -71,6 +86,9 @@ export function buildRemotePlayerSprites({
       if (b.distance !== a.distance) return b.distance - a.distance
       return a.name.localeCompare(b.name)
     })
+
+  pruneSmoothingState(smoothingState, activeSmoothingKeys)
+  return sprites
 }
 
 function predictDistance(player, { observedDistance, score, localElapsed, now }) {
@@ -87,6 +105,63 @@ function predictDistance(player, { observedDistance, score, localElapsed, now })
   const predictionMs = Math.min(MAX_PREDICTION_MS, Math.max(elapsedLeadMs, receivedLeadMs))
 
   return normalizeDistance(observedDistance + speed * predictionMs / 1000, score)
+}
+
+function smoothDistance(smoothingState, key, {
+  targetDistance,
+  baseVelocity,
+  state,
+  now,
+  trackWidth,
+}) {
+  if (!smoothingState || state !== 'racing') {
+    smoothingState?.set?.(key, {
+      distance: targetDistance,
+      velocity: baseVelocity,
+      updatedAt: now,
+    })
+    return targetDistance
+  }
+
+  const previous = smoothingState.get(key)
+  if (!previous) {
+    smoothingState.set(key, {
+      distance: targetDistance,
+      velocity: baseVelocity,
+      updatedAt: now,
+    })
+    return targetDistance
+  }
+
+  const dt = clamp((Number(now) - Number(previous.updatedAt || now)) / 1000, 0, 0.12)
+  const predictedDistance = previous.distance + previous.velocity * dt
+  const correction = targetDistance - predictedDistance
+  const smallCorrectionLimit = trackWidth * SMALL_CORRECTION_SCREEN_RATIO
+
+  if (Math.abs(correction) > smallCorrectionLimit) {
+    smoothingState.set(key, {
+      distance: targetDistance,
+      velocity: baseVelocity,
+      updatedAt: now,
+    })
+    return targetDistance
+  }
+
+  const correctionVelocity = correction / SMOOTH_CORRECTION_SECONDS
+  const velocity = clamp(baseVelocity + correctionVelocity, 0, MAX_REMOTE_SPEED)
+  smoothingState.set(key, {
+    distance: predictedDistance,
+    velocity,
+    updatedAt: now,
+  })
+  return predictedDistance
+}
+
+function pruneSmoothingState(smoothingState, activeKeys) {
+  if (!smoothingState?.keys) return
+  for (const key of smoothingState.keys()) {
+    if (!activeKeys.has(key)) smoothingState.delete(key)
+  }
 }
 
 function playerIncludesPubkey(player, pubkey) {
@@ -108,7 +183,7 @@ function clampJumpY(value) {
 
 function normalizeSpeed(speed) {
   const value = Number(speed)
-  return Number.isFinite(value) ? Math.max(0, Math.min(900, value)) : 0
+  return Number.isFinite(value) ? Math.max(0, Math.min(MAX_REMOTE_SPEED, value)) : 0
 }
 
 function normalizeElapsed(elapsed) {

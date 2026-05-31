@@ -98,8 +98,49 @@ describe('remote player sprites', () => {
       now: 2_000,
     })
 
-    expect(sprite.distance).toBeCloseTo(1_135)
-    expect(sprite.x).toBeCloseTo(231)
+    expect(sprite.distance).toBeCloseTo(1_270)
+    expect(sprite.x).toBeCloseTo(366)
+  })
+
+  it('smooths small packet corrections by changing render velocity instead of snapping', () => {
+    const smoothingState = new Map()
+    buildRemotePlayerSprites({
+      players: [{
+        pubkey: 'remote',
+        name: 'BOB',
+        score: 100,
+        distance: 1_000,
+        speed: 300,
+        state: 'racing',
+        lastSeen: 1_000,
+      }],
+      localPubkey: 'local',
+      localScore: 100,
+      localDistance: 1_000,
+      now: 1_000,
+      smoothingState,
+    })
+
+    const [sprite] = buildRemotePlayerSprites({
+      players: [{
+        pubkey: 'remote',
+        name: 'BOB',
+        score: 103,
+        distance: 1_030,
+        speed: 300,
+        state: 'racing',
+        lastSeen: 1_016,
+      }],
+      localPubkey: 'local',
+      localScore: 100,
+      localDistance: 1_000,
+      now: 1_016,
+      smoothingState,
+    })
+
+    expect(sprite.projectedDistance).toBe(1_030)
+    expect(sprite.distance).toBeCloseTo(1_004.8)
+    expect(smoothingState.get('BOB').velocity).toBeGreaterThan(300)
   })
 
   it('moves a remote player upward when their presence reports a jump', () => {

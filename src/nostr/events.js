@@ -9,6 +9,7 @@ export const SESSION_KIND = 20000
 export const SESSION_D_TAG = 'pufferfishgames/dinogame/session/v1'
 export const SIGNAL_KIND = 20001
 export const SIGNAL_D_TAG = 'pufferfishgames/dinogame/webrtc/v1'
+const MAX_REMOTE_SPEED = 1800
 
 export function createScoreEvent(pubkey, score, { now = Math.floor(Date.now() / 1000) } = {}) {
   const parsed = normalizeScore(score)
@@ -209,7 +210,7 @@ function clampJumpY(value) {
 
 function normalizeSpeed(speed) {
   const value = Number(speed)
-  return Number.isFinite(value) ? Math.max(0, Math.min(900, value)) : 0
+  return Number.isFinite(value) ? Math.max(0, Math.min(MAX_REMOTE_SPEED, value)) : 0
 }
 
 function normalizeElapsed(elapsed) {

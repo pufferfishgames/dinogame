@@ -5,6 +5,7 @@ export const COUNTDOWN_MS = 3_000
 export const START_EVENT_GRACE_MS = 10_000
 export const PLACEMENT_POINTS = [100, 50, 10]
 export const FINALIZE_GRACE_MS = 2_500
+const MAX_REMOTE_SPEED = 1800
 
 export function mergeNostrUpdate(existing, update, { isPeerConnected = false } = {}) {
   return {
@@ -390,7 +391,7 @@ function clampJumpY(value) {
 
 function normalizeSpeed(speed) {
   const value = Number(speed)
-  return Number.isFinite(value) ? Math.max(0, Math.min(900, value)) : 0
+  return Number.isFinite(value) ? Math.max(0, Math.min(MAX_REMOTE_SPEED, value)) : 0
 }
 
 function normalizeElapsed(elapsed) {

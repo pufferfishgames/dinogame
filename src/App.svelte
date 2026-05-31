@@ -76,6 +76,7 @@
   let seenRelayEventIds = new Set()
   let realtimeSeq = 0
   let realtimePeers = 0
+  let remoteSmoothingState = new Map()
 
   $: competitors = lobby.players
   $: localDisplayName = normalizePlayerName(playerName)
@@ -100,6 +101,7 @@
     localDistance: runner.distance,
     localElapsed: runner.elapsed,
     trackWidth: VIEW_WIDTH,
+    smoothingState: remoteSmoothingState,
   })
   $: waitingForPlayers = joined && competitors.length < 2 && lobby.phase === 'idle' && relayStatus === 'connecting'
   $: relayLabel = connectionLabel(relayStatus, joined)
@@ -212,6 +214,7 @@
     realtime?.close()
     realtime = null
     realtimePeers = 0
+    remoteSmoothingState.clear()
     if (presenceTimer) window.clearInterval(presenceTimer)
     if (pruneTimer) window.clearInterval(pruneTimer)
   }
@@ -307,6 +310,7 @@
     lastRealtimePublish = 0
     localFinishedAt = 0
     realtimeSeq = 0
+    remoteSmoothingState.clear()
     lastFrame = performance.now()
     publishPresence('countdown')
   }
