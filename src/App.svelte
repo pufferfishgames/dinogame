@@ -432,15 +432,19 @@
 
   function drawSky() {
     const gradient = ctx.createLinearGradient(0, 0, 0, VIEW_HEIGHT)
-    gradient.addColorStop(0, '#c6e6ef')
-    gradient.addColorStop(0.62, '#f7f1e6')
-    gradient.addColorStop(1, '#ead8b8')
+    gradient.addColorStop(0, '#a8d8e8')
+    gradient.addColorStop(0.52, '#f2ead7')
+    gradient.addColorStop(1, '#bed7b8')
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
 
     drawCloud(130, 78, 0.8)
     drawCloud(510, 50, 1)
     drawCloud(770, 96, 0.68)
+
+    drawCity()
+    drawForest()
+    drawRiver()
 
     if (lobby.phase === 'racing') {
       const pulse = (Math.sin((runner.elapsed ?? 0) * Math.PI * 3) + 1) / 2
@@ -457,6 +461,105 @@
     ctx.fill()
   }
 
+  function drawCity() {
+    const drift = (runner.distance / 84) % 184
+    const skylineY = 174
+    const colors = ['#5f7280', '#73858d', '#4f6372', '#88918b']
+
+    ctx.fillStyle = 'rgba(102, 123, 132, 0.18)'
+    ctx.fillRect(0, skylineY - 58, VIEW_WIDTH, 72)
+
+    for (let i = 0, x = -drift - 80; x < VIEW_WIDTH + 120; i += 1, x += 46) {
+      const width = 30 + (i % 3) * 8
+      const height = 34 + ((i * 17) % 42)
+      const top = skylineY - height
+
+      ctx.fillStyle = colors[i % colors.length]
+      ctx.fillRect(x, top, width, height)
+
+      if (i % 4 === 1) {
+        ctx.beginPath()
+        ctx.moveTo(x, top)
+        ctx.lineTo(x + width / 2, top - 14)
+        ctx.lineTo(x + width, top)
+        ctx.closePath()
+        ctx.fill()
+      }
+
+      ctx.fillStyle = 'rgba(248, 243, 231, 0.58)'
+      for (let wy = top + 10; wy < skylineY - 5; wy += 14) {
+        ctx.fillRect(x + 7, wy, 4, 5)
+        if (width > 34) ctx.fillRect(x + width - 12, wy, 4, 5)
+      }
+    }
+  }
+
+  function drawForest() {
+    ctx.fillStyle = 'rgba(55, 112, 76, 0.5)'
+    ctx.beginPath()
+    ctx.moveTo(0, 206)
+    ctx.bezierCurveTo(160, 184, 280, 224, 452, 198)
+    ctx.bezierCurveTo(626, 174, 736, 218, VIEW_WIDTH, 186)
+    ctx.lineTo(VIEW_WIDTH, GROUND)
+    ctx.lineTo(0, GROUND)
+    ctx.closePath()
+    ctx.fill()
+
+    const farScroll = (runner.distance / 18) % 88
+    for (let i = 0, x = -farScroll - 44; x < VIEW_WIDTH + 80; i += 1, x += 44) {
+      drawBackgroundPine(x, 238 + (i % 3) * 10, 0.78 + (i % 4) * 0.08, i % 2 ? '#2f6b4f' : '#3f7a4a')
+    }
+
+    const nearScroll = (runner.distance / 12) % 124
+    for (let i = 0, x = -nearScroll - 60; x < VIEW_WIDTH + 120; i += 1, x += 62) {
+      drawBackgroundPine(x, 268 + (i % 2) * 8, 1.05 + (i % 3) * 0.1, i % 2 ? '#214d35' : '#2b6040')
+    }
+  }
+
+  function drawBackgroundPine(x, baseY, scale, color) {
+    ctx.fillStyle = '#765438'
+    ctx.fillRect(x - 3 * scale, baseY - 34 * scale, 6 * scale, 34 * scale)
+    ctx.fillStyle = color
+    for (let layer = 0; layer < 3; layer += 1) {
+      const top = baseY - (80 - layer * 23) * scale
+      const half = (20 + layer * 9) * scale
+      const bottom = baseY - (42 - layer * 14) * scale
+      ctx.beginPath()
+      ctx.moveTo(x, top)
+      ctx.lineTo(x - half, bottom)
+      ctx.lineTo(x + half, bottom)
+      ctx.closePath()
+      ctx.fill()
+    }
+  }
+
+  function drawRiver() {
+    const river = ctx.createLinearGradient(0, 226, 0, GROUND)
+    river.addColorStop(0, '#4aa9b5')
+    river.addColorStop(1, '#2f6f9e')
+
+    ctx.fillStyle = river
+    ctx.beginPath()
+    ctx.moveTo(0, 232)
+    ctx.bezierCurveTo(148, 216, 254, 250, 388, 232)
+    ctx.bezierCurveTo(548, 210, 676, 246, VIEW_WIDTH, 218)
+    ctx.lineTo(VIEW_WIDTH, GROUND)
+    ctx.lineTo(0, GROUND)
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.strokeStyle = 'rgba(255, 250, 240, 0.5)'
+    ctx.lineWidth = 2
+    for (let i = 0; i < 5; i += 1) {
+      const offset = ((runner.distance / 5) + i * 168) % (VIEW_WIDTH + 140)
+      ctx.beginPath()
+      ctx.moveTo(offset - 120, 244 + (i % 2) * 15)
+      ctx.bezierCurveTo(offset - 70, 235, offset - 28, 257, offset + 24, 246)
+      ctx.bezierCurveTo(offset + 72, 236, offset + 104, 250, offset + 154, 240)
+      ctx.stroke()
+    }
+  }
+
   function drawCloud(x, y, scale) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.78)'
     ctx.beginPath()
@@ -467,8 +570,15 @@
   }
 
   function drawGround() {
-    ctx.fillStyle = '#416a4d'
+    ctx.fillStyle = '#264a33'
     ctx.fillRect(0, GROUND, VIEW_WIDTH, 10)
+    ctx.fillStyle = '#8f7144'
+    ctx.fillRect(0, GROUND + 10, VIEW_WIDTH, VIEW_HEIGHT - GROUND - 10)
+    ctx.fillStyle = '#c8b46c'
+    for (let x = -30; x < VIEW_WIDTH; x += 118) {
+      ctx.fillRect(x + ((runner.distance / 8) % 118), GROUND + 34, 38, 4)
+      ctx.fillRect(x + 72 + ((runner.distance / 8) % 118), GROUND + 58, 24, 3)
+    }
     ctx.fillStyle = '#d95f43'
     for (let x = -20; x < VIEW_WIDTH; x += 88) {
       ctx.fillRect(x + ((runner.distance / 7) % 88), GROUND + 24, 46, 5)
@@ -489,6 +599,15 @@
           break
         case 'puddle':
           drawPuddle(obstacle)
+          break
+        case 'crocodile':
+          drawCrocodile(obstacle)
+          break
+        case 'chair':
+          drawChair(obstacle)
+          break
+        case 'pine-tree':
+          drawPineBarrier(obstacle)
           break
         default:
           drawCactus(obstacle)
@@ -575,6 +694,89 @@
     ctx.beginPath()
     ctx.ellipse(x + obstacle.width * 0.36, y + 5, 13, 3, -0.16, 0, Math.PI * 2)
     ctx.fill()
+  }
+
+  function drawCrocodile(obstacle) {
+    const x = obstacle.x
+    const y = GROUND - obstacle.height
+    const greens = ['#285f3a', '#327447', '#246652', '#3e7c3f']
+    const green = greens[(obstacle.variant ?? 0) % greens.length]
+
+    ctx.fillStyle = green
+    ctx.beginPath()
+    ctx.roundRect(x + 13, y + 8, obstacle.width - 26, 15, 8)
+    ctx.roundRect(x + obstacle.width - 25, y + 4, 24, 16, 7)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(x + 13, y + 10)
+    ctx.lineTo(x, y + 17)
+    ctx.lineTo(x + 15, y + 22)
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.fillStyle = '#f8f3e7'
+    for (let tx = x + obstacle.width - 22; tx < x + obstacle.width - 5; tx += 6) {
+      ctx.beginPath()
+      ctx.moveTo(tx, y + 18)
+      ctx.lineTo(tx + 3, y + 23)
+      ctx.lineTo(tx + 6, y + 18)
+      ctx.closePath()
+      ctx.fill()
+    }
+
+    ctx.fillStyle = '#102018'
+    ctx.fillRect(x + obstacle.width - 12, y + 7, 3, 3)
+    ctx.fillStyle = '#163226'
+    ctx.fillRect(x + 19, y + 21, 7, 3)
+    ctx.fillRect(x + 49, y + 21, 7, 3)
+  }
+
+  function drawChair(obstacle) {
+    const x = obstacle.x
+    const y = GROUND - obstacle.height
+    const woods = ['#935d37', '#7e4d2d', '#a66a3c', '#6f4630']
+    const wood = woods[(obstacle.variant ?? 0) % woods.length]
+
+    ctx.fillStyle = wood
+    ctx.fillRect(x + 6, y + 3, 9, 38)
+    ctx.fillRect(x + 27, y + 3, 9, 38)
+    ctx.fillRect(x + 5, y + 4, 32, 8)
+    ctx.fillRect(x + 4, y + 22, 34, 9)
+    ctx.fillRect(x + 7, y + 31, 6, 15)
+    ctx.fillRect(x + 29, y + 31, 6, 15)
+
+    ctx.fillStyle = '#f8d77c'
+    ctx.fillRect(x + 8, y + 24, 26, 3)
+    ctx.fillStyle = '#4a2f22'
+    ctx.fillRect(x + 10, y + 12, 4, 10)
+    ctx.fillRect(x + 29, y + 12, 4, 10)
+  }
+
+  function drawPineBarrier(obstacle) {
+    const x = obstacle.x
+    const y = GROUND - obstacle.height
+    const greens = ['#214d35', '#2f6b4f', '#27613d', '#3d7d48']
+    const green = greens[(obstacle.variant ?? 0) % greens.length]
+    const center = x + obstacle.width / 2
+
+    ctx.fillStyle = '#765438'
+    ctx.fillRect(center - 5, y + obstacle.height - 25, 10, 25)
+    ctx.fillStyle = green
+    for (let layer = 0; layer < 3; layer += 1) {
+      const top = y + layer * 15
+      const half = 16 + layer * 6
+      const bottom = y + 30 + layer * 14
+      ctx.beginPath()
+      ctx.moveTo(center, top)
+      ctx.lineTo(center - half, bottom)
+      ctx.lineTo(center + half, bottom)
+      ctx.closePath()
+      ctx.fill()
+    }
+    ctx.fillStyle = '#d95f43'
+    ctx.fillRect(center - 2, y + 13, 4, 4)
+    ctx.fillRect(center + 10, y + 31, 4, 4)
+    ctx.fillRect(center - 13, y + 42, 4, 4)
   }
 
   function drawRemotePlayers() {

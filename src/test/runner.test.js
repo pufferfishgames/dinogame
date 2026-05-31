@@ -34,12 +34,35 @@ describe('runner simulation', () => {
     expect([...seenTypes].sort()).toEqual(OBSTACLE_TYPES.map((obstacle) => obstacle.type).sort())
   })
 
+  it('includes crocodiles, chairs, and pine trees in the barrier roster', () => {
+    expect(OBSTACLE_TYPES.map((obstacle) => obstacle.type)).toEqual(expect.arrayContaining([
+      'crocodile',
+      'chair',
+      'pine-tree',
+    ]))
+  })
+
   it('advances score and speed while alive', () => {
     const state = stepRunner(createRunnerState({ seed: 1 }), 1)
 
     expect(state.score).toBeGreaterThan(0)
     expect(state.speed).toBeGreaterThan(INITIAL_SPEED)
     expect(state.alive).toBe(true)
+  })
+
+  it('ramps speed faster than the old gentle cruise', () => {
+    let state = {
+      ...createRunnerState({ seed: 1 }),
+      obstacles: [],
+      nextX: 1_000_000,
+      obstacleCount: 0,
+    }
+
+    for (let i = 0; i < 10 * 60; i += 1) {
+      state = stepRunner(state, 1 / 60)
+    }
+
+    expect(state.speed).toBeGreaterThan(INITIAL_SPEED + 60)
   })
 
   it('starts with wider obstacle gaps and tightens the range later in the race', () => {
@@ -131,6 +154,29 @@ describe('runner simulation', () => {
     expect(state.elapsed).toBe(ROUND_DURATION_SECONDS)
     expect(afterFinish.distance).toBe(finishedDistance)
   })
+
+  it.each([1, 42, 12345])(
+    'keeps visible barriers in the final 15 seconds during a clean run with seed %s',
+    (seed) => {
+      let state = createRunnerState({ seed })
+      const finalStretchSamples = []
+
+      for (let i = 0; i < ROUND_DURATION_SECONDS * 60 && !state.finished; i += 1) {
+        const nextObstacle = state.obstacles.find((obstacle) => obstacle.x + obstacle.width > DINO_X)
+        if (nextObstacle && nextObstacle.x - DINO_X < 132 && state.dino.y === 0) {
+          state = jump(state)
+        }
+        state = stepRunner(state, 1 / 60)
+
+        if (state.elapsed >= ROUND_DURATION_SECONDS - 15 && i % 60 === 0) {
+          finalStretchSamples.push(state.obstacles.some((obstacle) => obstacle.x < 920 && obstacle.x + obstacle.width > 0))
+        }
+      }
+
+      expect(finalStretchSamples).toHaveLength(15)
+      expect(finalStretchSamples.every(Boolean)).toBe(true)
+    },
+  )
 
   it.each([1, 7, 42, 99, 12345])(
     'gives a novice jump strategy enough room to stay engaged for 60 seconds with seed %s',

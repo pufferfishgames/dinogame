@@ -1,8 +1,8 @@
 export const DINO_X = 96
 export const GROUND_Y = 0
 export const INITIAL_SPEED = 240
-export const SPEED_ACCELERATION = 5
-export const CRASH_RECOVERY_ACCELERATION = 28
+export const SPEED_ACCELERATION = 7
+export const CRASH_RECOVERY_ACCELERATION = 36
 export const FIRST_OBSTACLE_X = 980
 export const ROUND_DURATION_SECONDS = 60
 export const CRASH_SLOWDOWN_FACTOR = 0.55
@@ -25,6 +25,9 @@ export const OBSTACLE_TYPES = [
   { type: 'tortoise', width: 52, height: 28 },
   { type: 'mushroom', width: 38, height: 38 },
   { type: 'puddle', width: 64, height: 14 },
+  { type: 'crocodile', width: 76, height: 24 },
+  { type: 'chair', width: 42, height: 46 },
+  { type: 'pine-tree', width: 48, height: 62 },
 ]
 
 export function createRunnerState({ seed = 1 } = {}) {
@@ -107,8 +110,9 @@ export function stepRunner(state, dt) {
     randomSeed = generated.seed
     nextX = generated.nextX
     obstacleCount += 1
-    obstacles = [...obstacles, generated.obstacle]
+    obstacles = [...obstacles, { ...generated.obstacle, x: generated.obstacle.x - distance }]
   }
+  obstacles = obstacles.filter((obstacle) => obstacle.x + obstacle.width > -40)
 
   let elapsed = Math.min(ROUND_DURATION_SECONDS, (state.elapsed ?? 0) + cappedDt)
   const finished = elapsed >= ROUND_DURATION_SECONDS - 1e-6
@@ -217,13 +221,24 @@ function generateObstacle(seed, x, index = 0) {
 
 function pickObstacleType(value, complexity) {
   const late = clamp(complexity, 0, 1)
-  const cactusCutoff = 0.28 + late * 0.1
-  const tortoiseCutoff = cactusCutoff + 0.2 + late * 0.16
-  const mushroomCutoff = tortoiseCutoff + 0.3 - late * 0.08
-  if (value < cactusCutoff) return OBSTACLE_TYPES[0]
-  if (value < tortoiseCutoff) return OBSTACLE_TYPES[1]
-  if (value < mushroomCutoff) return OBSTACLE_TYPES[2]
-  return OBSTACLE_TYPES[3]
+  const weights = [
+    [OBSTACLE_TYPES[0], 0.22 + late * 0.05],
+    [OBSTACLE_TYPES[1], 0.16 + late * 0.08],
+    [OBSTACLE_TYPES[2], 0.19 - late * 0.03],
+    [OBSTACLE_TYPES[3], 0.12 - late * 0.02],
+    [OBSTACLE_TYPES[4], 0.08 + late * 0.08],
+    [OBSTACLE_TYPES[5], 0.12],
+    [OBSTACLE_TYPES[6], 0.09 + late * 0.02],
+  ]
+  const total = weights.reduce((sum, [, weight]) => sum + weight, 0)
+  let threshold = value * total
+
+  for (const [obstacle, weight] of weights) {
+    threshold -= weight
+    if (threshold <= 0) return obstacle
+  }
+
+  return OBSTACLE_TYPES.at(-1)
 }
 
 function lerp(start, end, amount) {
