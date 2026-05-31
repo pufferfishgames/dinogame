@@ -80,7 +80,7 @@
   $: remotePlayerSprites = buildRemotePlayerSprites({
     players: competitors,
     localPubkey: pubkey,
-    localScore: currentScore,
+    localScore: runner.score,
     trackWidth: VIEW_WIDTH,
   })
   $: waitingForPlayers = joined && competitors.length < 2 && lobby.phase === 'idle' && relayStatus === 'connecting'
