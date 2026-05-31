@@ -834,9 +834,6 @@
         case 'pine-tree':
           drawPineBarrier(obstacle)
           break
-        case 'tunnel':
-          drawTunnel(obstacle)
-          break
         default:
           drawCactus(obstacle)
       }
@@ -1005,72 +1002,6 @@
     ctx.fillRect(center - 2, y + 13, 4, 4)
     ctx.fillRect(center + 10, y + 31, 4, 4)
     ctx.fillRect(center - 13, y + 42, 4, 4)
-  }
-
-  function drawTunnel(obstacle) {
-    const x = obstacle.x
-    const y = GROUND - obstacle.height
-    const variant = obstacle.variant ?? 0
-    const greens = ['#39a64b', '#2f9b57', '#45ad63', '#328c4e']
-    const green = greens[variant % greens.length]
-    const phase = (runner.elapsed ?? 0) * 5 + (obstacle.motionOffset ?? 0) * Math.PI * 2
-    const turtleWalk = Math.sin(phase) * 9
-    const topTurtleWalk = Math.cos(phase * 0.8) * 7
-
-    ctx.fillStyle = 'rgba(16, 32, 24, 0.18)'
-    ctx.beginPath()
-    ctx.ellipse(x + obstacle.width / 2, GROUND + 4, obstacle.width / 2, 8, 0, 0, Math.PI * 2)
-    ctx.fill()
-
-    ctx.fillStyle = '#1e6b37'
-    ctx.beginPath()
-    ctx.roundRect(x + 13, y + 16, obstacle.width - 26, obstacle.height - 12, 8)
-    ctx.fill()
-
-    ctx.fillStyle = green
-    ctx.beginPath()
-    ctx.roundRect(x + 8, y + 3, obstacle.width - 16, 22, 8)
-    ctx.roundRect(x + 18, y + 18, obstacle.width - 36, obstacle.height - 18, 8)
-    ctx.fill()
-
-    ctx.fillStyle = '#0f3c2c'
-    ctx.beginPath()
-    ctx.roundRect(x + 24, y + 24, obstacle.width - 48, obstacle.height - 24, 9)
-    ctx.fill()
-
-    ctx.fillStyle = 'rgba(248, 243, 231, 0.38)'
-    ctx.fillRect(x + 19, y + 7, 8, 15)
-    ctx.fillRect(x + 29, y + 21, 7, obstacle.height - 25)
-    ctx.fillStyle = '#f8d77c'
-    ctx.fillRect(x + obstacle.width - 25, y + 7, 7, 5)
-
-    drawTinyTurtle(x + 14 + turtleWalk, GROUND - 7, 0.68, 1, phase)
-    drawTinyTurtle(x + obstacle.width - 24 + topTurtleWalk, y + 1, 0.58, -1, phase + 1.7)
-  }
-
-  function drawTinyTurtle(x, y, scale, direction, phase) {
-    ctx.save()
-    ctx.translate(x, y)
-    ctx.scale(scale * direction, scale)
-
-    ctx.fillStyle = '#2f8a55'
-    ctx.beginPath()
-    ctx.ellipse(0, 0, 17, 10, 0, Math.PI, Math.PI * 2)
-    ctx.lineTo(17, 7)
-    ctx.lineTo(-17, 7)
-    ctx.closePath()
-    ctx.fill()
-
-    ctx.fillStyle = '#f0c46b'
-    ctx.beginPath()
-    ctx.ellipse(18, 1, 6, 5, 0, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillRect(-12, 5 + Math.sin(phase) * 2, 5, 7)
-    ctx.fillRect(6, 5 - Math.sin(phase) * 2, 5, 7)
-
-    ctx.fillStyle = '#102018'
-    ctx.fillRect(20, -1, 2, 2)
-    ctx.restore()
   }
 
   function drawRemotePlayers() {

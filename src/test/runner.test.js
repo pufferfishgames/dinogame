@@ -35,12 +35,11 @@ describe('runner simulation', () => {
     expect([...seenTypes].sort()).toEqual(OBSTACLE_TYPES.map((obstacle) => obstacle.type).sort())
   })
 
-  it('includes crocodiles, chairs, pine trees, and tunnels in the barrier roster', () => {
+  it('includes crocodiles, chairs, and pine trees in the barrier roster', () => {
     expect(OBSTACLE_TYPES.map((obstacle) => obstacle.type)).toEqual(expect.arrayContaining([
       'crocodile',
       'chair',
       'pine-tree',
-      'tunnel',
     ]))
   })
 

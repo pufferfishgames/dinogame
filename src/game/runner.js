@@ -28,7 +28,6 @@ export const OBSTACLE_TYPES = [
   { type: 'crocodile', width: 76, height: 24 },
   { type: 'chair', width: 42, height: 46 },
   { type: 'pine-tree', width: 48, height: 62 },
-  { type: 'tunnel', width: 92, height: 56 },
 ]
 
 export function createRunnerState({ seed = 1 } = {}) {
@@ -243,14 +242,13 @@ function generateObstacle(seed, x, index = 0, previousType = '') {
 function pickObstacleType(value, complexity, previousType = '') {
   const late = clamp(complexity, 0, 1)
   const weights = [
-    [OBSTACLE_TYPES[0], 0.22 + late * 0.05],
-    [OBSTACLE_TYPES[1], 0.16 + late * 0.08],
-    [OBSTACLE_TYPES[2], 0.19 - late * 0.03],
-    [OBSTACLE_TYPES[3], 0.12 - late * 0.02],
-    [OBSTACLE_TYPES[4], 0.08 + late * 0.08],
-    [OBSTACLE_TYPES[5], 0.12],
-    [OBSTACLE_TYPES[6], 0.09 + late * 0.02],
-    [OBSTACLE_TYPES[7], 0.08 + late * 0.08],
+    [OBSTACLE_TYPES[0], 0.24 + late * 0.06],
+    [OBSTACLE_TYPES[1], 0.18 + late * 0.08],
+    [OBSTACLE_TYPES[2], 0.20 - late * 0.03],
+    [OBSTACLE_TYPES[3], 0.13 - late * 0.02],
+    [OBSTACLE_TYPES[4], 0.09 + late * 0.09],
+    [OBSTACLE_TYPES[5], 0.13],
+    [OBSTACLE_TYPES[6], 0.10 + late * 0.04],
   ].map(([obstacle, weight]) => [
     obstacle,
     obstacle.type === previousType ? 0 : weight,
