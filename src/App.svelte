@@ -7,7 +7,8 @@
     recordPlayerUpdate,
     startRace,
   } from './game/multiplayer.js'
-  import { normalizePlayerName } from './game/player.js'
+  import { connectionLabel, connectionTone } from './game/connectivity.js'
+  import { normalizeEditablePlayerName, normalizePlayerName } from './game/player.js'
   import { getOrCreateSessionPassphrase } from './game/joining.js'
   import { createRunnerState, jump, stepRunner } from './game/runner.js'
   import { passphraseToPrivkey, privkeyToPubkey, randomPassphrase } from './nostr/identity.js'
@@ -51,6 +52,8 @@
   $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
   $: currentScore = runner.score
   $: waitingForPlayers = joined && competitors.length < 2 && lobby.phase === 'idle' && relayStatus === 'connecting'
+  $: relayLabel = connectionLabel(relayStatus, joined)
+  $: relayTone = connectionTone(relayStatus, joined)
   $: countdown = lobby.race && lobby.phase === 'countdown'
     ? Math.max(0, Math.ceil((lobby.race.startAt - Date.now()) / 1000))
     : 0
@@ -103,6 +106,11 @@
     joined = true
     lobby = recordPlayerUpdate(lobby, localPresence('lobby'), Date.now())
     connectSession()
+  }
+
+  function handleNameInput(event) {
+    playerName = normalizeEditablePlayerName(event.currentTarget.value)
+    event.currentTarget.value = playerName
   }
 
   function connectSession() {
@@ -412,8 +420,12 @@
         <h1>Dino Relay</h1>
       </div>
       <div class="status-strip" aria-label="Relay status">
-        <span class:online={relayStatus === 'connected'} class:local={relayStatus === 'local'}></span>
-        {relayStatus}
+        <span
+          class:online={relayTone === 'online'}
+          class:local={relayTone === 'local'}
+          class:pending={relayTone === 'pending'}
+        ></span>
+        {relayLabel}
       </div>
     </div>
 
@@ -425,8 +437,12 @@
         <input
           value={playerName}
           maxlength="7"
+          inputmode="text"
+          autocapitalize="characters"
+          autocorrect="off"
           autocomplete="nickname"
-          on:input={(event) => (playerName = normalizePlayerName(event.currentTarget.value))}
+          spellcheck="false"
+          on:input={handleNameInput}
         />
       </label>
 
