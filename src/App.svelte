@@ -13,6 +13,7 @@
     raceStartControl,
     recordPlayerUpdate,
     shouldApplyRaceStart,
+    shouldIgnoreSessionUpdateForRace,
     sortPlayers,
     startRace,
   } from './game/multiplayer.js'
@@ -228,6 +229,7 @@
     if (update.type === 'start' && update.race) {
       applyIncomingRace(update.race)
     }
+    if (shouldIgnoreSessionUpdateForRace(lobby, update, Date.now())) return
 
     const existing = findPlayerForPubkeyOrName(lobby.players, update.pubkey, update.name)
     const isPeerConnected = realtime?.isPeerConnected(update.pubkey) ?? false

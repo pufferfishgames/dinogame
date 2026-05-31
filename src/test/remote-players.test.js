@@ -127,6 +127,28 @@ describe('remote player sprites', () => {
     expect(sprites.map((sprite) => sprite.pubkey)).toEqual(['near'])
   })
 
+  it('does not wrap a far-behind slow player back onto the right side of the track', () => {
+    const sprites = buildRemotePlayerSprites({
+      players: [{
+        pubkey: 'slow',
+        name: 'SLOW',
+        score: 100,
+        distance: 1_000,
+        speed: 300,
+        elapsed: 4,
+        state: 'racing',
+        lastSeen: 1_000,
+      }],
+      localPubkey: 'local',
+      localScore: 500,
+      localDistance: 5_000,
+      localElapsed: 20,
+      now: 6_000,
+    })
+
+    expect(sprites).toEqual([])
+  })
+
   it('does not render a merged same-name local player as a remote dinosaur', () => {
     const sprites = buildRemotePlayerSprites({
       players: [

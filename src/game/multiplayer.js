@@ -324,6 +324,20 @@ export function shouldApplyRaceStart(lobby, race, now = Date.now(), graceMs = ST
   return startAt >= now - graceMs
 }
 
+export function shouldIgnoreSessionUpdateForRace(lobby, update, now = Date.now()) {
+  const updateRaceId = String(update?.race?.id ?? '')
+  if (!updateRaceId || !isRaceScopedSessionUpdate(update)) return false
+
+  const currentRaceId = String(lobby?.race?.id ?? '')
+  if (currentRaceId) return updateRaceId !== currentRaceId
+
+  return !shouldApplyRaceStart(lobby, update.race, now)
+}
+
+function isRaceScopedSessionUpdate(update) {
+  return update?.type === 'start' || ['countdown', 'racing', 'finished'].includes(update?.state)
+}
+
 export function startRace(lobby, starterPubkey, now = Date.now(), { minPlayers = 1 } = {}) {
   if (!canStartRace(lobby, starterPubkey, { minPlayers })) return { lobby, started: false }
 

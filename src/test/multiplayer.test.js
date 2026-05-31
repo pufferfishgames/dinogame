@@ -10,6 +10,7 @@ import {
   raceStartControl,
   recordPlayerUpdate,
   shouldApplyRaceStart,
+  shouldIgnoreSessionUpdateForRace,
   startRace,
 } from '../game/multiplayer.js'
 
@@ -234,6 +235,36 @@ describe('multiplayer lobby', () => {
 
     expect(shouldApplyRaceStart(lobby, { id: 'old-race', startAt: 10_000 }, 130_000)).toBe(false)
     expect(shouldApplyRaceStart(lobby, { id: 'fresh-race', startAt: 126_000 }, 130_000)).toBe(true)
+  })
+
+  it('ignores stale relay motion from an old race instead of wrapping players back into view', () => {
+    const lobby = createLobbyState()
+    const update = {
+      type: 'presence',
+      state: 'racing',
+      race: { id: 'old-race', startAt: 10_000 },
+    }
+
+    expect(shouldIgnoreSessionUpdateForRace(lobby, update, 130_000)).toBe(true)
+  })
+
+  it('ignores relay motion from a different active race id', () => {
+    const lobby = {
+      ...createLobbyState(),
+      phase: 'racing',
+      race: { id: 'current-race', startAt: 100_000 },
+    }
+
+    expect(shouldIgnoreSessionUpdateForRace(lobby, {
+      type: 'presence',
+      state: 'racing',
+      race: { id: 'other-race', startAt: 100_000 },
+    }, 101_000)).toBe(true)
+    expect(shouldIgnoreSessionUpdateForRace(lobby, {
+      type: 'presence',
+      state: 'racing',
+      race: { id: 'current-race', startAt: 100_000 },
+    }, 101_000)).toBe(false)
   })
 
   it('awards final race points by placement', () => {
