@@ -16,7 +16,12 @@ describe('relay message helpers', () => {
       'scores',
       { kinds: [30078], '#d': ['pufferfishgames/dinogame/total/v1'] },
     ])
-    expect(JSON.parse(buildSessionSubscribeMessage('room'))[2]).toMatchObject({ kinds: [20000] })
+    expect(JSON.parse(buildSessionSubscribeMessage('room'))).toEqual([
+      'REQ',
+      'room',
+      { kinds: [20000], '#d': ['pufferfishgames/dinogame/session/v1'] },
+      { kinds: [20001], '#d': ['pufferfishgames/dinogame/webrtc/v1'] },
+    ])
   })
 
   it('parses common relay responses', () => {

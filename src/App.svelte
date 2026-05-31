@@ -16,11 +16,18 @@
   import { getOrCreateSessionPassphrase } from './game/joining.js'
   import { buildRemotePlayerSprites } from './game/remotePlayers.js'
   import { ROUND_DURATION_SECONDS, createRunnerState, jump, stepRunner } from './game/runner.js'
+  import {
+    REALTIME_SEND_INTERVAL_MS,
+    createRealtimeMesh,
+    createRealtimeUpdate,
+  } from './game/webrtc.js'
   import { passphraseToPrivkey, privkeyToPubkey, randomPassphrase } from './nostr/identity.js'
   import {
     createScoreEvent,
+    createSignalEvent,
     createSessionEvent,
     getTotalScores,
+    parseSignalEvent,
     parseSessionEvent,
     signEvent,
   } from './nostr/events.js'
@@ -47,12 +54,16 @@
   let lobby = createLobbyState()
   let runner = createRunnerState({ seed: 1 })
   let sessionRelay = null
+  let realtime = null
   let presenceTimer = 0
   let pruneTimer = 0
   let latestSubmittedRace = ''
   let lastMotionPublish = 0
+  let lastRealtimePublish = 0
   let localFinishedAt = 0
   let scoreEvents = []
+  let realtimeSeq = 0
+  let realtimePeers = 0
 
   $: competitors = lobby.players
   $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
@@ -70,6 +81,7 @@
   $: waitingForPlayers = joined && competitors.length < 2 && lobby.phase === 'idle' && relayStatus === 'connecting'
   $: relayLabel = connectionLabel(relayStatus, joined)
   $: relayTone = connectionTone(relayStatus, joined)
+  $: liveLabel = realtimePeers > 0 ? `P2P ${realtimePeers}` : relayLabel
   $: countdown = lobby.race && lobby.phase === 'countdown'
     ? Math.max(0, Math.ceil((lobby.race.startAt - Date.now()) / 1000))
     : 0
@@ -141,22 +153,33 @@
       },
       onEvent: handleSessionEvent,
     })
+    openRealtime()
     presenceTimer = window.setInterval(() => {
       publishPresence(lobby.phase === 'racing' ? runner.finished ? 'finished' : 'racing' : 'lobby')
     }, 1800)
     pruneTimer = window.setInterval(() => {
       lobby = prunePlayers(lobby, Date.now())
+      realtime?.updatePlayers(lobby.players)
     }, 1500)
   }
 
   function closeSession() {
     sessionRelay?.close()
     sessionRelay = null
+    realtime?.close()
+    realtime = null
+    realtimePeers = 0
     if (presenceTimer) window.clearInterval(presenceTimer)
     if (pruneTimer) window.clearInterval(pruneTimer)
   }
 
   function handleSessionEvent(event) {
+    const signal = parseSignalEvent(event)
+    if (signal) {
+      realtime?.handleSignal(signal)
+      return
+    }
+
     const update = parseSessionEvent(event)
     if (!update) return
 
@@ -175,6 +198,33 @@
       },
       (update.createdAt || Math.floor(Date.now() / 1000)) * 1000,
     )
+    realtime?.updatePlayers(lobby.players)
+  }
+
+  function openRealtime() {
+    realtime?.close()
+    realtime = createRealtimeMesh({
+      localPubkey: pubkey,
+      publishSignal,
+      onMessage: handleRealtimeMessage,
+      onPeerStatus: (status) => {
+        realtimePeers = status.connected
+      },
+    })
+    realtime.updatePlayers(lobby.players)
+  }
+
+  function publishSignal(payload) {
+    if (!joined) return
+    const event = signEvent(createSignalEvent(pubkey, payload), privkey)
+    sessionRelay?.send(event)
+  }
+
+  function handleRealtimeMessage(update) {
+    if (!update?.pubkey || update.pubkey === pubkey) return
+    if (update.raceId && lobby.race?.id && update.raceId !== lobby.race.id) return
+    lobby = recordPlayerUpdate(lobby, update, Date.now())
+    realtime?.updatePlayers(lobby.players)
   }
 
   function beginRace() {
@@ -192,7 +242,9 @@
     runner = createRunnerState({ seed: race.seed })
     latestSubmittedRace = ''
     lastMotionPublish = 0
+    lastRealtimePublish = 0
     localFinishedAt = 0
+    realtimeSeq = 0
     lastFrame = performance.now()
     publishPresence('countdown')
   }
@@ -200,7 +252,9 @@
   function publishPresence(state = 'lobby') {
     if (!joined) return
     publishSession('presence', state)
+    publishRealtime(state)
     lobby = recordPlayerUpdate(lobby, localPresence(state), Date.now())
+    realtime?.updatePlayers(lobby.players)
   }
 
   function publishSession(type, state, race = lobby.race) {
@@ -216,6 +270,20 @@
       privkey,
     )
     sessionRelay?.send(event)
+  }
+
+  function publishRealtime(state = 'lobby') {
+    if (!joined || !realtime) return 0
+    realtimeSeq += 1
+    return realtime.broadcast(createRealtimeUpdate({
+      name: playerName,
+      score: runner.score,
+      state,
+      jumpY: runner.dino.y,
+      raceId: lobby.race?.id ?? '',
+      elapsed: runner.elapsed,
+      seq: realtimeSeq,
+    }))
   }
 
   function localPresence(state) {
@@ -238,6 +306,8 @@
   function handleJump() {
     if (!joined || lobby.phase !== 'racing' || runner.finished) return
     runner = jump(runner)
+    lastRealtimePublish = performance.now()
+    publishPresence('racing')
   }
 
   function tick(now) {
@@ -252,7 +322,11 @@
     if (joined && lobby.phase === 'racing' && !runner.finished) {
       const next = stepRunner(runner, dt)
       runner = next
-      if (now - lastMotionPublish >= 220) {
+      if (now - lastRealtimePublish >= REALTIME_SEND_INTERVAL_MS) {
+        lastRealtimePublish = now
+        publishRealtime('racing')
+      }
+      if (now - lastMotionPublish >= 300) {
         lastMotionPublish = now
         publishPresence('racing')
       }
@@ -396,8 +470,8 @@
     for (const obstacle of runner.obstacles) {
       if (obstacle.x > VIEW_WIDTH || obstacle.x + obstacle.width < 0) continue
       switch (obstacle.type) {
-        case 'turtle':
-          drawTurtle(obstacle)
+        case 'tortoise':
+          drawTortoise(obstacle)
           break
         case 'mushroom':
           drawMushroom(obstacle)
@@ -429,7 +503,7 @@
     ctx.fillRect(x + 24, y + 18, 2, 4)
   }
 
-  function drawTurtle(obstacle) {
+  function drawTortoise(obstacle) {
     const x = obstacle.x
     const y = GROUND - obstacle.height
     const shellColors = ['#2f8a55', '#2f6b9a', '#7aa342', '#a35b35']
@@ -589,13 +663,13 @@
         <p class="eyebrow">Multiplayer jump race</p>
         <h1>Nikolai's dino race</h1>
       </div>
-      <div class="status-strip" aria-label="Relay status">
+      <div class="status-strip" aria-label="Connection status">
         <span
           class:online={relayTone === 'online'}
           class:local={relayTone === 'local'}
           class:pending={relayTone === 'pending'}
         ></span>
-        {relayLabel}
+        {liveLabel}
       </div>
     </div>
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   createScoreEvent,
+  createSignalEvent,
   createSessionEvent,
   getTotalScores,
   parseScoreEvent,
+  parseSignalEvent,
   parseSessionEvent,
   signEvent,
 } from '../nostr/events.js'
@@ -57,6 +59,25 @@ describe('Nostr score events', () => {
       state: 'racing',
       jumpY: -64,
       race: { id: 'race-1' },
+    })
+  })
+
+  it('creates and parses signed WebRTC signaling events', () => {
+    const event = createSignalEvent('alice-pubkey', {
+      type: 'offer',
+      to: 'bob-pubkey',
+      description: { type: 'offer', sdp: 'sdp' },
+    }, { now: 12 })
+
+    expect(event.kind).toBe(20001)
+    expect(event.tags).toContainEqual(['d', 'pufferfishgames/dinogame/webrtc/v1'])
+    expect(event.tags).toContainEqual(['p', 'bob-pubkey'])
+    expect(parseSignalEvent(event)).toMatchObject({
+      pubkey: 'alice-pubkey',
+      type: 'offer',
+      to: 'bob-pubkey',
+      description: { type: 'offer', sdp: 'sdp' },
+      createdAt: 12,
     })
   })
 })

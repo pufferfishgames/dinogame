@@ -1,6 +1,8 @@
 import {
   SCORE_D_TAG,
   SCORE_KIND,
+  SIGNAL_D_TAG,
+  SIGNAL_KIND,
   SESSION_D_TAG,
   SESSION_KIND,
   getTotalScores,
@@ -38,6 +40,7 @@ export function buildSessionSubscribeMessage(subscriptionId) {
     'REQ',
     subscriptionId,
     { kinds: [SESSION_KIND], '#d': [SESSION_D_TAG] },
+    { kinds: [SIGNAL_KIND], '#d': [SIGNAL_D_TAG] },
   ])
 }
 

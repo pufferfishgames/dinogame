@@ -8,6 +8,8 @@ import {
   getRunnerSnapshot,
   isColliding,
   jump,
+  obstacleComplexityForX,
+  obstacleGapRangeForComplexity,
   stepRunner,
 } from '../game/runner.js'
 
@@ -37,6 +39,26 @@ describe('runner simulation', () => {
     expect(state.score).toBeGreaterThan(0)
     expect(state.speed).toBeGreaterThan(INITIAL_SPEED)
     expect(state.alive).toBe(true)
+  })
+
+  it('starts with wider obstacle gaps and tightens the range later in the race', () => {
+    const early = obstacleGapRangeForComplexity(0)
+    const late = obstacleGapRangeForComplexity(1)
+
+    expect(early.min).toBeGreaterThan(late.min)
+    expect(early.max).toBeGreaterThan(late.max)
+    expect(obstacleComplexityForX(980)).toBe(0)
+    expect(obstacleComplexityForX(24_000)).toBeGreaterThan(0.9)
+  })
+
+  it('generates more varied spacing than a fixed cactus cadence', () => {
+    const state = createRunnerState({ seed: 42 })
+    const gaps = state.obstacles.slice(1, 10).map((obstacle, index) => {
+      const previous = state.obstacles[index]
+      return Math.round(obstacle.x - previous.x - previous.width)
+    })
+
+    expect(new Set(gaps).size).toBeGreaterThan(6)
   })
 
   it('lets the dinosaur jump and land', () => {

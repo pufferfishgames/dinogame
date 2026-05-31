@@ -7,6 +7,8 @@ export const SCORE_KIND = 30078
 export const SCORE_D_TAG = 'pufferfishgames/dinogame/total/v1'
 export const SESSION_KIND = 20000
 export const SESSION_D_TAG = 'pufferfishgames/dinogame/session/v1'
+export const SIGNAL_KIND = 20001
+export const SIGNAL_D_TAG = 'pufferfishgames/dinogame/webrtc/v1'
 
 export function createScoreEvent(pubkey, score, { now = Math.floor(Date.now() / 1000) } = {}) {
   const parsed = normalizeScore(score)
@@ -45,6 +47,22 @@ export function createSessionEvent(pubkey, payload, { now = Math.floor(Date.now(
   }
 }
 
+export function createSignalEvent(pubkey, payload, { now = Math.floor(Date.now() / 1000) } = {}) {
+  const parsed = normalizeSignal(payload)
+
+  return {
+    kind: SIGNAL_KIND,
+    pubkey,
+    created_at: now,
+    tags: [
+      ['d', SIGNAL_D_TAG],
+      ['p', parsed.to],
+      ['t', 'dinogame'],
+    ],
+    content: JSON.stringify(parsed),
+  }
+}
+
 export function parseScoreEvent(event) {
   if (!event || event.kind !== SCORE_KIND || !hasTag(event, 'd', SCORE_D_TAG)) return null
 
@@ -75,6 +93,24 @@ export function parseSessionEvent(event) {
     state: payload.state ?? 'lobby',
     jumpY: clampJumpY(payload.jumpY),
     race: payload.race ?? null,
+    createdAt: event.created_at ?? 0,
+  }
+}
+
+export function parseSignalEvent(event) {
+  if (!event || event.kind !== SIGNAL_KIND || !hasTag(event, 'd', SIGNAL_D_TAG)) return null
+
+  const payload = safeJson(event.content)
+  const signal = normalizeSignal({
+    ...payload,
+    to: payload.to ?? findTag(event, 'p')?.[1],
+  })
+
+  if (!signal.type || !signal.to) return null
+
+  return {
+    ...signal,
+    pubkey: event.pubkey,
     createdAt: event.created_at ?? 0,
   }
 }
@@ -118,6 +154,16 @@ function normalizeScore(score) {
     name: normalizePlayerName(score?.name),
     score: Math.max(0, Math.floor(Number(score?.score) || 0)),
     raceId: String(score?.raceId ?? ''),
+  }
+}
+
+function normalizeSignal(payload = {}) {
+  const type = ['offer', 'answer', 'ice'].includes(payload.type) ? payload.type : ''
+  return {
+    type,
+    to: String(payload.to ?? ''),
+    description: payload.description ?? null,
+    candidate: payload.candidate ?? null,
   }
 }
 

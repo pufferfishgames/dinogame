@@ -11,13 +11,17 @@ const GRAVITY = 2200
 const JUMP_VELOCITY = -820
 const DINO_WIDTH = 44
 const DINO_HEIGHT = 48
-const MIN_OBSTACLE_GAP = 390
-const MAX_OBSTACLE_GAP = 690
+const EARLY_MIN_OBSTACLE_GAP = 500
+const EARLY_MAX_OBSTACLE_GAP = 860
+const LATE_MIN_OBSTACLE_GAP = 300
+const LATE_MAX_OBSTACLE_GAP = 620
+const MAX_GAP_JITTER = 170
+const COMPLEXITY_DISTANCE = 23_000
 const TRACK_WIDTH = 920
 
 export const OBSTACLE_TYPES = [
   { type: 'cactus', width: 30, height: 50 },
-  { type: 'turtle', width: 52, height: 28 },
+  { type: 'tortoise', width: 52, height: 28 },
   { type: 'mushroom', width: 38, height: 38 },
   { type: 'puddle', width: 64, height: 14 },
 ]
@@ -28,7 +32,7 @@ export function createRunnerState({ seed = 1 } = {}) {
   const obstacles = []
 
   for (let i = 0; i < 24; i += 1) {
-    const generated = generateObstacle(randomSeed, nextX)
+    const generated = generateObstacle(randomSeed, nextX, i)
     randomSeed = generated.seed
     nextX = generated.nextX
     obstacles.push(generated.obstacle)
@@ -38,6 +42,7 @@ export function createRunnerState({ seed = 1 } = {}) {
     seed: seed >>> 0 || 1,
     randomSeed,
     nextX,
+    obstacleCount: obstacles.length,
     elapsed: 0,
     distance: 0,
     score: 0,
@@ -89,14 +94,16 @@ export function stepRunner(state, dt) {
 
   let randomSeed = state.randomSeed
   let nextX = state.nextX
+  let obstacleCount = state.obstacleCount ?? state.obstacles.length
   let obstacles = state.obstacles
     .map((obstacle) => ({ ...obstacle, x: obstacle.x - speed * cappedDt }))
     .filter((obstacle) => obstacle.x + obstacle.width > -40)
 
   while ((obstacles.at(-1)?.x ?? 0) < TRACK_WIDTH) {
-    const generated = generateObstacle(randomSeed, nextX)
+    const generated = generateObstacle(randomSeed, nextX, obstacleCount)
     randomSeed = generated.seed
     nextX = generated.nextX
+    obstacleCount += 1
     obstacles = [...obstacles, generated.obstacle]
   }
 
@@ -108,6 +115,7 @@ export function stepRunner(state, dt) {
     ...state,
     randomSeed,
     nextX,
+    obstacleCount,
     elapsed,
     distance,
     score,
@@ -167,23 +175,60 @@ export function isColliding(snapshot, obstacle) {
   return dinoBottom < obstacleTop && dinoTop > obstacleBottom
 }
 
-function generateObstacle(seed, x) {
+export function obstacleComplexityForX(x) {
+  return clamp((x - FIRST_OBSTACLE_X) / COMPLEXITY_DISTANCE, 0, 1)
+}
+
+export function obstacleGapRangeForComplexity(complexity) {
+  const level = clamp(complexity, 0, 1)
+  return {
+    min: lerp(EARLY_MIN_OBSTACLE_GAP, LATE_MIN_OBSTACLE_GAP, level),
+    max: lerp(EARLY_MAX_OBSTACLE_GAP, LATE_MAX_OBSTACLE_GAP, level),
+  }
+}
+
+function generateObstacle(seed, x, index = 0) {
   let random = nextRandom(seed)
-  const type = OBSTACLE_TYPES[Math.floor(random.value * OBSTACLE_TYPES.length)]
+  const complexity = Math.max(obstacleComplexityForX(x), clamp(index / 46, 0, 1))
+  const type = pickObstacleType(random.value, complexity)
   random = nextRandom(random.seed)
   const variant = Math.floor(random.value * 4)
   random = nextRandom(random.seed)
-  const gap = MIN_OBSTACLE_GAP + random.value * (MAX_OBSTACLE_GAP - MIN_OBSTACLE_GAP)
+  const range = obstacleGapRangeForComplexity(complexity)
+  let gap = range.min + random.value * (range.max - range.min)
+  random = nextRandom(random.seed)
+  gap += (random.value - 0.5) * MAX_GAP_JITTER
+  gap = clamp(gap, LATE_MIN_OBSTACLE_GAP, EARLY_MAX_OBSTACLE_GAP)
 
   return {
     seed: random.seed,
     nextX: x + type.width + gap,
     obstacle: {
       ...type,
+      complexity,
       variant,
       x,
     },
   }
+}
+
+function pickObstacleType(value, complexity) {
+  const late = clamp(complexity, 0, 1)
+  const cactusCutoff = 0.28 + late * 0.1
+  const tortoiseCutoff = cactusCutoff + 0.2 + late * 0.16
+  const mushroomCutoff = tortoiseCutoff + 0.3 - late * 0.08
+  if (value < cactusCutoff) return OBSTACLE_TYPES[0]
+  if (value < tortoiseCutoff) return OBSTACLE_TYPES[1]
+  if (value < mushroomCutoff) return OBSTACLE_TYPES[2]
+  return OBSTACLE_TYPES[3]
+}
+
+function lerp(start, end, amount) {
+  return start + (end - start) * amount
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value))
 }
 
 function nextRandom(seed) {
