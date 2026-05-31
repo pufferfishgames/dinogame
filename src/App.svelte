@@ -984,24 +984,28 @@
     ctx.scale(scale, scale)
 
     ctx.fillStyle = color
-    ctx.fillRect(17, 17, 25, 20)
-    ctx.fillRect(31, 8, 17, 18)
-    ctx.fillRect(45, 12, 12, 7)
-    ctx.fillRect(34, 22, 8, 10)
-    ctx.fillRect(9, 24, 12, 7)
-    ctx.fillRect(6, 27, 8, 6)
-    ctx.fillRect(13, 34, 8, 12)
-    ctx.fillRect(35, 34, 8, 12)
-    ctx.fillRect(10, 44, 13, 5)
-    ctx.fillRect(34, 44, 12, 5)
-    ctx.fillRect(42, 27, 8, 4)
+    ctx.fillRect(2, 23, 11, 5)
+    ctx.fillRect(11, 20, 11, 6)
+    ctx.fillRect(20, 17, 10, 7)
+    ctx.fillRect(27, 15, 20, 23)
+    ctx.fillRect(33, 11, 14, 9)
+    ctx.fillRect(42, 7, 19, 17)
+    ctx.fillRect(56, 11, 10, 7)
+    ctx.fillRect(55, 18, 8, 6)
+    ctx.fillRect(47, 27, 9, 4)
+    ctx.fillRect(53, 30, 4, 3)
+    ctx.fillRect(27, 36, 8, 13)
+    ctx.fillRect(22, 47, 15, 5)
+    ctx.fillRect(43, 36, 7, 12)
+    ctx.fillRect(42, 47, 13, 5)
 
     ctx.fillStyle = '#f8f3e7'
-    ctx.fillRect(43, 11, 3, 3)
+    ctx.fillRect(54, 10, 3, 3)
+    ctx.fillRect(60, 18, 5, 3)
     ctx.fillStyle = accent
-    ctx.fillRect(50, 18, 7, 3)
+    ctx.fillRect(58, 24, 5, 3)
 
-    if (hat) drawBirthdayHat(36, 7, 1)
+    if (hat) drawBirthdayHat(45, 7, 1)
 
     ctx.restore()
   }
