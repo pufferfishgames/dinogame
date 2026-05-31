@@ -274,6 +274,11 @@ h2 {
   background: #e4f1e7;
 }
 
+.player-list li.pre-join {
+  opacity: 0.42;
+  border-style: dashed;
+}
+
 .player-list span,
 .score-list span,
 .player-list strong,

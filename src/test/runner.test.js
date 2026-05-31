@@ -4,6 +4,7 @@ import {
   INITIAL_SPEED,
   OBSTACLE_TYPES,
   ROUND_DURATION_SECONDS,
+  SPEED_ACCELERATION,
   createRunnerState,
   getRunnerSnapshot,
   isColliding,
@@ -53,6 +54,16 @@ describe('runner simulation', () => {
 
   it('reaches peak complexity well before the 20k distance mark', () => {
     expect(obstacleComplexityForX(15_000)).toBeGreaterThan(0.9)
+  })
+
+  it('recovers speed faster than baseline acceleration when below the time-based target', () => {
+    const state = {
+      ...createRunnerState({ seed: 1 }),
+      speed: 150,
+      elapsed: 30,
+    }
+    const next = stepRunner(state, 0.05)
+    expect(next.speed - state.speed).toBeGreaterThan(SPEED_ACCELERATION * 0.05)
   })
 
   it('applies a steep speed cut when the dinosaur hits an obstacle', () => {

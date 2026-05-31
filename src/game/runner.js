@@ -2,6 +2,7 @@ export const DINO_X = 96
 export const GROUND_Y = 0
 export const INITIAL_SPEED = 240
 export const SPEED_ACCELERATION = 5
+export const CRASH_RECOVERY_ACCELERATION = 28
 export const FIRST_OBSTACLE_X = 980
 export const ROUND_DURATION_SECONDS = 60
 export const CRASH_SLOWDOWN_FACTOR = 0.55
@@ -80,7 +81,9 @@ export function stepRunner(state, dt) {
   const cappedDt = Math.min(requestedDt, remaining)
   if (cappedDt <= 0) return { ...state, elapsed: ROUND_DURATION_SECONDS, finished: true }
 
-  let speed = state.speed + SPEED_ACCELERATION * cappedDt
+  const targetSpeed = INITIAL_SPEED + SPEED_ACCELERATION * (state.elapsed ?? 0)
+  const accel = state.speed < targetSpeed ? CRASH_RECOVERY_ACCELERATION : SPEED_ACCELERATION
+  let speed = state.speed + accel * cappedDt
   const distance = state.distance + speed * cappedDt
   const score = Math.floor(distance / 10)
   const crashCooldown = Math.max(0, (state.crashCooldown ?? 0) - cappedDt)

@@ -10,6 +10,7 @@
     raceStartControl,
     recordPlayerUpdate,
     shouldApplyRaceStart,
+    sortPlayers,
     startRace,
   } from './game/multiplayer.js'
   import { connectionLabel, connectionTone } from './game/connectivity.js'
@@ -68,7 +69,10 @@
 
   $: competitors = lobby.players
   $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
-  $: currentScore = runner.score
+  $: rankedPlayers = sortPlayers(competitors.map((p) => p.pubkey === pubkey ? { ...p, score: runner.score } : p))
+  $: lobbyDisplay = joined
+    ? competitors.slice(0, 10)
+    : [...competitors.slice(0, 9), { pubkey, name: normalizePlayerName(playerName) || 'DINO', score: 0, preJoin: true }]
   $: raceControl = raceStartControl(lobby, pubkey, { joined, runnerAlive: !runner.finished })
   $: canRequestRaceStart = raceControl.canStart
   $: raceButtonLabel = raceControl.label
@@ -422,6 +426,7 @@
     drawObstacles()
     drawRemotePlayers()
     drawDino()
+    drawRankings()
     drawHud()
   }
 
@@ -437,7 +442,16 @@
     drawCloud(510, 50, 1)
     drawCloud(770, 96, 0.68)
 
-    ctx.fillStyle = '#e26845'
+    if (lobby.phase === 'racing') {
+      const pulse = (Math.sin((runner.elapsed ?? 0) * Math.PI * 3) + 1) / 2
+      ctx.strokeStyle = `rgba(220, 55, 30, ${0.3 + pulse * 0.55})`
+      ctx.lineWidth = 3 + pulse * 5
+      ctx.beginPath()
+      ctx.arc(835, 72, 38 + pulse * 6, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+
+    ctx.fillStyle = lobby.phase === 'racing' ? '#d93020' : '#e26845'
     ctx.beginPath()
     ctx.arc(835, 72, 31, 0, Math.PI * 2)
     ctx.fill()
@@ -625,10 +639,37 @@
     ctx.restore()
   }
 
+  function drawRankings() {
+    if (!joined || lobby.phase !== 'racing') return
+    const top = rankedPlayers.slice(0, 3)
+    if (!top.length) return
+
+    const MEDAL_COLORS = ['#e8c040', '#b0b4bc', '#c87828']
+    const x = 798
+    const baseY = 53
+
+    ctx.save()
+    ctx.textAlign = 'right'
+    ctx.font = '800 11px ui-monospace, SFMono-Regular, Menlo, monospace'
+
+    for (let i = 0; i < top.length; i++) {
+      const label = `${i + 1} ${top[i].name}`
+      const tw = ctx.measureText(label).width
+      const y = baseY + i * 17
+      ctx.fillStyle = 'rgba(16, 32, 24, 0.58)'
+      ctx.beginPath()
+      ctx.roundRect(x - tw - 8, y - 11, tw + 12, 15, 3)
+      ctx.fill()
+      ctx.fillStyle = MEDAL_COLORS[i]
+      ctx.fillText(label, x, y)
+    }
+
+    ctx.restore()
+  }
+
   function drawHud() {
     ctx.fillStyle = '#102018'
     ctx.font = '700 24px ui-monospace, SFMono-Regular, Menlo, monospace'
-    ctx.fillText(String(runner.score).padStart(5, '0'), VIEW_WIDTH - 112, 38)
     ctx.fillText(`${String(secondsLeft).padStart(2, '0')}s`, 22, 38)
 
     if (!joined) {
@@ -706,11 +747,11 @@
     <section class="panel-block">
       <div class="panel-header">
         <h2>Lobby</h2>
-        <span>{competitors.length}/8</span>
+        <span>{competitors.length}/10</span>
       </div>
       <ol class="player-list">
-        {#each competitors.slice(0, 8) as player}
-          <li class:mine={player.pubkey === pubkey}>
+        {#each lobbyDisplay as player}
+          <li class:mine={player.pubkey === pubkey} class:pre-join={player.preJoin}>
             <span>{player.name}</span>
             <strong>{player.score}</strong>
           </li>
