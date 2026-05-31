@@ -52,6 +52,51 @@ describe('remote player sprites', () => {
     expect(ahead.x - behind.x).toBeCloseTo(50, 0)
   })
 
+  it('predicts a racing player forward from speed and local race elapsed', () => {
+    const [sprite] = buildRemotePlayerSprites({
+      players: [{
+        pubkey: 'remote',
+        name: 'BOB',
+        score: 100,
+        distance: 1_000,
+        speed: 300,
+        elapsed: 5,
+        state: 'racing',
+        lastSeen: 1_000,
+      }],
+      localPubkey: 'local',
+      localScore: 100,
+      localDistance: 1_000,
+      localElapsed: 5.2,
+      now: 1_000,
+    })
+
+    expect(sprite.observedDistance).toBe(1_000)
+    expect(sprite.distance).toBeCloseTo(1_060)
+    expect(sprite.x).toBeCloseTo(156)
+  })
+
+  it('caps prediction when packets stop arriving', () => {
+    const [sprite] = buildRemotePlayerSprites({
+      players: [{
+        pubkey: 'remote',
+        name: 'BOB',
+        score: 100,
+        distance: 1_000,
+        distanceVelocity: 300,
+        state: 'racing',
+        lastSeen: 1_000,
+      }],
+      localPubkey: 'local',
+      localScore: 100,
+      localDistance: 1_000,
+      now: 2_000,
+    })
+
+    expect(sprite.distance).toBeCloseTo(1_135)
+    expect(sprite.x).toBeCloseTo(231)
+  })
+
   it('moves a remote player upward when their presence reports a jump', () => {
     const [grounded] = buildRemotePlayerSprites({
       players: [{ pubkey: 'b', name: 'BOB', score: 120, state: 'racing', jumpY: 0 }],

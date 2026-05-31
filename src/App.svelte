@@ -95,6 +95,7 @@
     localName: localDisplayName,
     localScore: runner.score,
     localDistance: runner.distance,
+    localElapsed: runner.elapsed,
     trackWidth: VIEW_WIDTH,
   })
   $: waitingForPlayers = joined && competitors.length < 2 && lobby.phase === 'idle' && relayStatus === 'connecting'
@@ -321,8 +322,10 @@
         name: playerName,
         score: runner.score,
         distance: runner.distance,
+        speed: runner.speed,
         state,
         jumpY: runner.dino.y,
+        elapsed: runner.elapsed,
         race,
       }),
       privkey,
@@ -337,6 +340,7 @@
       name: playerName,
       score: runner.score,
       distance: runner.distance,
+      speed: runner.speed,
       state,
       jumpY: runner.dino.y,
       raceId: lobby.race?.id ?? '',
@@ -351,8 +355,10 @@
       name: playerName,
       score: runner.score,
       distance: runner.distance,
+      speed: runner.speed,
       state,
       jumpY: runner.dino.y,
+      elapsed: runner.elapsed,
     }
   }
 

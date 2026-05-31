@@ -61,8 +61,10 @@ describe('Nostr score events', () => {
       name: 'BOB',
       score: 42,
       distance: 429.7,
+      speed: 318.4,
       state: 'racing',
       jumpY: -64.4,
+      elapsed: 12.25,
       race: { id: 'race-1' },
     }, { now: 10 })
 
@@ -71,8 +73,10 @@ describe('Nostr score events', () => {
       name: 'BOB',
       score: 42,
       distance: 429.7,
+      speed: 318.4,
       state: 'racing',
       jumpY: -64,
+      elapsed: 12.25,
       race: { id: 'race-1' },
     })
   })

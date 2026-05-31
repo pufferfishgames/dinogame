@@ -43,6 +43,33 @@ describe('multiplayer lobby', () => {
     ])
   })
 
+  it('stores remote speed for client-side movement prediction', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, {
+      pubkey: 'a',
+      name: 'ALICE',
+      score: 100,
+      distance: 1_004,
+      speed: 318.4,
+      elapsed: 12.25,
+      state: 'racing',
+    }, 1000)
+
+    expect(lobby.players[0]).toMatchObject({
+      speed: 318.4,
+      distanceVelocity: 318.4,
+      elapsed: 12.25,
+    })
+  })
+
+  it('derives remote velocity from distance deltas for older packets without speed', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 100, distance: 1_000, state: 'racing' }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 103, distance: 1_030, state: 'racing' }, 1100)
+
+    expect(lobby.players[0].distanceVelocity).toBe(300)
+  })
+
   it('ignores stale realtime sequence updates', () => {
     let lobby = createLobbyState()
     lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 100, distance: 1_050, seq: 8 }, 1000)

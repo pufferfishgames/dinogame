@@ -14,6 +14,8 @@ export function mergeNostrUpdate(existing, update, { isPeerConnected = false } =
     state: isPeerConnected && existing ? existing.state : update.state,
     jumpY: isPeerConnected && existing ? existing.jumpY : update.jumpY,
     distance: isPeerConnected && existing ? existing.distance : update.distance,
+    speed: isPeerConnected && existing ? existing.speed : update.speed,
+    elapsed: isPeerConnected && existing ? existing.elapsed : update.elapsed,
   }
 }
 
@@ -58,6 +60,11 @@ export function canFinalizeRace(
 export function recordPlayerUpdate(lobby, update, now = Date.now()) {
   if (!update?.pubkey) return lobby
   const score = Math.max(0, Math.floor(Number(update.score) || 0))
+  const distance = normalizeDistance(update.distance, score)
+  const state = update.state ?? 'lobby'
+  const jumpY = clampJumpY(update.jumpY)
+  const speed = normalizeSpeed(update.speed)
+  const elapsed = normalizeElapsed(update.elapsed)
   const seq = Math.max(0, Math.floor(Number(update.seq) || 0))
   const name = normalizePlayerName(update.name)
   const existing = new Map(lobby.players.map((player) => [player.name, player]))
@@ -79,22 +86,30 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
   const sameNamePlayer = existing.get(name)
   const mergedWith = sameNamePlayer ?? previous
   const appliesVisibleUpdate = !mergedWith || now >= (mergedWith.lastSeen ?? 0)
+  const distanceVelocity = deriveDistanceVelocity(mergedWith, {
+    distance,
+    speed,
+    state,
+    now,
+    appliesVisibleUpdate,
+  })
 
   const pubkeys = mergeUnique([...(mergedWith?.pubkeys ?? [mergedWith?.pubkey]), update.pubkey])
   const nextPlayer = {
     ...mergePlayerProgress(mergedWith, {
       score,
-      distance: normalizeDistance(update.distance, score),
-      state: update.state ?? 'lobby',
-      jumpY: clampJumpY(update.jumpY),
+      distance,
+      speed,
+      distanceVelocity,
       lastSeen: now,
       pubkey: update.pubkey,
     }, { appliesVisibleUpdate }),
     name,
     pubkey: appliesVisibleUpdate ? choosePrimaryPubkey(mergedWith, update.pubkey, now) : mergedWith.pubkey,
     pubkeys,
-    state: appliesVisibleUpdate ? update.state ?? 'lobby' : mergedWith.state,
-    jumpY: appliesVisibleUpdate ? clampJumpY(update.jumpY) : mergedWith.jumpY,
+    state: appliesVisibleUpdate ? state : mergedWith.state,
+    jumpY: appliesVisibleUpdate ? jumpY : mergedWith.jumpY,
+    elapsed: appliesVisibleUpdate ? elapsed : mergedWith.elapsed,
     seq,
     seqByPubkey: {
       ...(mergedWith?.seqByPubkey ?? (mergedWith?.pubkey ? { [mergedWith.pubkey]: mergedWith.seq ?? 0 } : {})),
@@ -120,6 +135,8 @@ function mergePlayerProgress(existing, update, { appliesVisibleUpdate = true } =
     return {
       score: update.score,
       distance: update.distance,
+      speed: update.speed,
+      distanceVelocity: update.distanceVelocity,
       lastSeen: update.lastSeen,
     }
   }
@@ -128,20 +145,32 @@ function mergePlayerProgress(existing, update, { appliesVisibleUpdate = true } =
     return {
       score: existing.score,
       distance: existing.distance,
+      speed: existing.speed,
+      distanceVelocity: existing.distanceVelocity,
       lastSeen: existing.lastSeen,
     }
   }
 
-  const existingScore = Math.max(0, Math.floor(Number(existing.score) || 0))
-  const existingDistance = normalizeDistance(existing.distance, existingScore)
-  const nextDistance = Math.max(existingDistance, update.distance)
-  const nextScore = Math.max(existingScore, update.score)
-
   return {
-    score: nextScore,
-    distance: nextDistance,
-    lastSeen: Math.max(existing.lastSeen ?? 0, update.lastSeen),
+    score: update.score,
+    distance: update.distance,
+    speed: update.speed,
+    distanceVelocity: update.distanceVelocity,
+    lastSeen: update.lastSeen,
   }
+}
+
+function deriveDistanceVelocity(existing, { distance, speed, state, now, appliesVisibleUpdate }) {
+  if (!appliesVisibleUpdate || state !== 'racing') return existing?.distanceVelocity ?? 0
+  if (speed > 0) return speed
+  if (!existing?.lastSeen) return 0
+
+  const previousScore = Math.max(0, Math.floor(Number(existing.score) || 0))
+  const previousDistance = normalizeDistance(existing.distance, previousScore)
+  const elapsedSeconds = (now - existing.lastSeen) / 1000
+  if (elapsedSeconds <= 0 || elapsedSeconds > 2) return existing.distanceVelocity ?? 0
+
+  return normalizeSpeed((distance - previousDistance) / elapsedSeconds)
 }
 
 function findPlayerByPubkey(players, pubkey) {
@@ -343,6 +372,16 @@ export function makeRaceSeed(value, now = Date.now()) {
 function clampJumpY(value) {
   const y = Math.round(Number(value) || 0)
   return Math.max(-180, Math.min(0, y))
+}
+
+function normalizeSpeed(speed) {
+  const value = Number(speed)
+  return Number.isFinite(value) ? Math.max(0, Math.min(900, value)) : 0
+}
+
+function normalizeElapsed(elapsed) {
+  const value = Number(elapsed)
+  return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
 function normalizeDistance(distance, score = 0) {

@@ -17,6 +17,7 @@ export function createRealtimeUpdate({
   name,
   score = 0,
   distance,
+  speed = 0,
   state = 'lobby',
   jumpY = 0,
   raceId = '',
@@ -30,6 +31,7 @@ export function createRealtimeUpdate({
     name: normalizePlayerName(name),
     score: normalizedScore,
     distance: normalizeDistance(distance, normalizedScore),
+    speed: normalizeSpeed(speed),
     state: String(state || 'lobby'),
     jumpY: clampJumpY(jumpY),
     raceId: String(raceId ?? ''),
@@ -291,6 +293,11 @@ function hasRemoteDescription(pc) {
 function clampJumpY(value) {
   const y = Math.round(Number(value) || 0)
   return Math.max(-180, Math.min(0, y))
+}
+
+function normalizeSpeed(speed) {
+  const value = Number(speed)
+  return Number.isFinite(value) ? Math.max(0, Math.min(900, value)) : 0
 }
 
 function normalizeDistance(distance, score = 0) {

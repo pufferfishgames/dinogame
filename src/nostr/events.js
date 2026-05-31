@@ -41,8 +41,10 @@ export function createSessionEvent(pubkey, payload, { now = Math.floor(Date.now(
       name: normalizePlayerName(payload.name),
       score: Math.max(0, Math.floor(Number(payload.score) || 0)),
       distance: normalizeDistance(payload.distance, payload.score),
+      speed: normalizeSpeed(payload.speed),
       state: payload.state ?? 'lobby',
       jumpY: clampJumpY(payload.jumpY),
+      elapsed: normalizeElapsed(payload.elapsed),
       race: payload.race ?? null,
     }),
   }
@@ -92,8 +94,10 @@ export function parseSessionEvent(event) {
     name: normalizePlayerName(payload.name),
     score: Math.max(0, Math.floor(Number(payload.score) || 0)),
     distance: normalizeDistance(payload.distance, payload.score),
+    speed: normalizeSpeed(payload.speed),
     state: payload.state ?? 'lobby',
     jumpY: clampJumpY(payload.jumpY),
+    elapsed: normalizeElapsed(payload.elapsed),
     race: payload.race ?? null,
     createdAt: event.created_at ?? 0,
   }
@@ -201,6 +205,16 @@ function hasTag(event, key, value) {
 function clampJumpY(value) {
   const y = Math.round(Number(value) || 0)
   return Math.max(-180, Math.min(0, y))
+}
+
+function normalizeSpeed(speed) {
+  const value = Number(speed)
+  return Number.isFinite(value) ? Math.max(0, Math.min(900, value)) : 0
+}
+
+function normalizeElapsed(elapsed) {
+  const value = Number(elapsed)
+  return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
 function normalizeDistance(distance, score = 0) {
