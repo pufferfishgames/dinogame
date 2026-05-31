@@ -6,6 +6,8 @@ export const REALTIME_CHANNEL = 'dinogame-state-v1'
 
 const DEFAULT_ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
 ]
 const MAX_REMOTE_SPEED = 1800
 

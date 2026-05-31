@@ -12,6 +12,7 @@
     prunePlayers,
     raceStartControl,
     recordPlayerUpdate,
+    resetRacePositions,
     shouldApplyRaceStart,
     shouldIgnoreSessionUpdateForRace,
     sortPlayers,
@@ -303,7 +304,7 @@
   function applyIncomingRace(race) {
     if (!shouldApplyRaceStart(lobby, race, Date.now())) return
     enterRaceFullscreen()
-    lobby = applyRace(lobby, race, Date.now())
+    lobby = resetRacePositions(applyRace(lobby, race, Date.now()))
     runner = createRunnerState({ seed: race.seed })
     latestSubmittedRace = ''
     lastMotionPublish = 0

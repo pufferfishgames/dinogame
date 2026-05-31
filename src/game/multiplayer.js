@@ -8,15 +8,17 @@ export const FINALIZE_GRACE_MS = 2_500
 const MAX_REMOTE_SPEED = 1800
 
 export function mergeNostrUpdate(existing, update, { isPeerConnected = false } = {}) {
+  const isTerminalState = update.state === 'finished' || update.state === 'crashed'
+  const preferExisting = isPeerConnected && existing && !isTerminalState
   return {
     pubkey: update.pubkey,
     name: update.name,
     score: update.score,
-    state: isPeerConnected && existing ? existing.state : update.state,
-    jumpY: isPeerConnected && existing ? existing.jumpY : update.jumpY,
-    distance: isPeerConnected && existing ? existing.distance : update.distance,
-    speed: isPeerConnected && existing ? existing.speed : update.speed,
-    elapsed: isPeerConnected && existing ? existing.elapsed : update.elapsed,
+    state: preferExisting ? existing.state : update.state,
+    jumpY: preferExisting ? existing.jumpY : update.jumpY,
+    distance: preferExisting ? existing.distance : update.distance,
+    speed: preferExisting ? existing.speed : update.speed,
+    elapsed: preferExisting ? existing.elapsed : update.elapsed,
   }
 }
 
@@ -277,6 +279,21 @@ export function mergeLobbyPlayersByName(lobby) {
     next = recordPlayerUpdate(next, player, player.lastSeen ?? Date.now())
   }
   return next
+}
+
+export function resetRacePositions(lobby) {
+  return {
+    ...lobby,
+    players: lobby.players.map((player) => ({
+      ...player,
+      seq: 0,
+      seqByPubkey: {},
+      distance: 0,
+      speed: 0,
+      elapsed: 0,
+      distanceVelocity: 0,
+    })),
+  }
 }
 
 export function prunePlayers(lobby, now = Date.now(), ttlMs = PLAYER_TTL_MS) {

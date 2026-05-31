@@ -9,6 +9,7 @@ import {
   prunePlayers,
   raceStartControl,
   recordPlayerUpdate,
+  resetRacePositions,
   shouldApplyRaceStart,
   shouldIgnoreSessionUpdateForRace,
   startRace,
@@ -302,5 +303,39 @@ describe('multiplayer lobby', () => {
     lobby = { ...lobby, phase: 'racing' }
 
     expect(canFinalizeRace(lobby, 'a', 30_000, 30_100)).toBe(true)
+  })
+
+  it('lets a finished Nostr update override WebRTC state so the next-race button can enable', () => {
+    const existing = { state: 'racing', jumpY: 0, distance: 1_800 }
+    const nostrUpdate = { pubkey: 'a', name: 'ALICE', score: 200, state: 'finished', jumpY: 0, distance: 1_800 }
+    const merged = mergeNostrUpdate(existing, nostrUpdate, { isPeerConnected: true })
+    expect(merged.state).toBe('finished')
+  })
+
+  it('lets a crashed Nostr update override WebRTC state so the next-race button can enable', () => {
+    const existing = { state: 'racing', jumpY: 0, distance: 900 }
+    const nostrUpdate = { pubkey: 'a', name: 'ALICE', score: 80, state: 'crashed', jumpY: 0, distance: 900 }
+    const merged = mergeNostrUpdate(existing, nostrUpdate, { isPeerConnected: true })
+    expect(merged.state).toBe('crashed')
+  })
+
+  it('resets per-player seq and positions when a new race starts', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 200, distance: 1_800, speed: 400, elapsed: 28, seq: 500, state: 'finished' }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'b', name: 'BOB', score: 300, distance: 2_100, speed: 420, elapsed: 25, seq: 480, state: 'finished' }, 1000)
+
+    const reset = resetRacePositions(lobby)
+
+    expect(reset.players[0]).toMatchObject({ distance: 0, speed: 0, elapsed: 0, distanceVelocity: 0, seq: 0, seqByPubkey: {} })
+    expect(reset.players[1]).toMatchObject({ distance: 0, speed: 0, elapsed: 0, distanceVelocity: 0, seq: 0, seqByPubkey: {} })
+    expect(reset.players.map((p) => [p.name, p.score])).toEqual([['BOB', 300], ['ALICE', 200]])
+  })
+
+  it('accepts low seq updates after a race reset', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 200, distance: 1_800, seq: 500 }, 1000)
+    lobby = resetRacePositions(lobby)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 200, distance: 50, seq: 1 }, 2000)
+    expect(lobby.players[0].distance).toBe(50)
   })
 })
