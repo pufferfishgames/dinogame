@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import {
     applyRace,
+    awardRacePoints,
     createLobbyState,
     prunePlayers,
     raceStartControl,
@@ -54,9 +55,10 @@
   $: competitors = lobby.players
   $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
   $: currentScore = runner.score
-  $: raceControl = raceStartControl(lobby, pubkey, { joined, runnerAlive: runner.alive })
+  $: raceControl = raceStartControl(lobby, pubkey, { joined, runnerAlive: !runner.finished })
   $: canRequestRaceStart = raceControl.canStart
   $: raceButtonLabel = raceControl.label
+  $: secondsLeft = Math.max(0, Math.ceil(30 - (runner.elapsed ?? 0)))
   $: remotePlayerSprites = buildRemotePlayerSprites({
     players: competitors,
     localPubkey: pubkey,
@@ -137,7 +139,7 @@
       onEvent: handleSessionEvent,
     })
     presenceTimer = window.setInterval(() => {
-      publishPresence(lobby.phase === 'racing' ? runner.alive ? 'racing' : 'crashed' : 'lobby')
+      publishPresence(lobby.phase === 'racing' ? runner.finished ? 'finished' : 'racing' : 'lobby')
     }, 1800)
     pruneTimer = window.setInterval(() => {
       lobby = prunePlayers(lobby, Date.now())
@@ -230,7 +232,7 @@
   }
 
   function handleJump() {
-    if (!joined || lobby.phase !== 'racing' || !runner.alive) return
+    if (!joined || lobby.phase !== 'racing' || runner.finished) return
     runner = jump(runner)
   }
 
@@ -243,16 +245,16 @@
       publishPresence('racing')
     }
 
-    if (joined && lobby.phase === 'racing' && runner.alive) {
+    if (joined && lobby.phase === 'racing' && !runner.finished) {
       const next = stepRunner(runner, dt)
       runner = next
       if (now - lastMotionPublish >= 220) {
         lastMotionPublish = now
         publishPresence('racing')
       }
-      if (!next.alive) {
-        publishPresence('crashed')
-        submitScore(next.score)
+      if (next.finished) {
+        publishPresence('finished')
+        submitRacePoints()
       }
     }
 
@@ -260,14 +262,16 @@
     frame = requestAnimationFrame(tick)
   }
 
-  async function submitScore(score) {
+  async function submitRacePoints() {
     if (!lobby.race || latestSubmittedRace === lobby.race.id) return
     latestSubmittedRace = lobby.race.id
+    const award = awardRacePoints(lobby.players).find((entry) => entry.pubkey === pubkey)
+    const points = award?.points ?? 100
 
-    if (score > localBest) {
-      localBest = score
-      writeStoredValue(BEST_KEY, String(score))
-      const event = signEvent(createScoreEvent(pubkey, { name: playerName, score, raceId: lobby.race.id }), privkey)
+    if (points > localBest) {
+      localBest = points
+      writeStoredValue(BEST_KEY, String(points))
+      const event = signEvent(createScoreEvent(pubkey, { name: playerName, score: points, raceId: lobby.race.id }), privkey)
       scoreEvents = [...scoreEvents, event]
       highScores = getBestScores([...scoreEvents, event, ...highScores.map(scoreToEvent)], 10)
       try {
@@ -450,17 +454,18 @@
     ctx.fillStyle = '#102018'
     ctx.font = '700 24px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.fillText(String(runner.score).padStart(5, '0'), VIEW_WIDTH - 112, 38)
+    ctx.fillText(`${String(secondsLeft).padStart(2, '0')}s`, 22, 38)
 
     if (!joined) {
-      drawCenteredLabel('DINO RELAY', 170, 38)
+      drawCenteredLabel('NIKOLAI', 170, 38)
     } else if (waitingForPlayers) {
       drawCenteredLabel('WAITING', 172, 34)
     } else if (countdown > 0) {
       drawCenteredLabel(String(countdown), 166, 58)
     } else if (lobby.phase !== 'racing') {
       drawCenteredLabel('READY', 172, 42)
-    } else if (!runner.alive) {
-      drawCenteredLabel('CRASH', 172, 42)
+    } else if (runner.finished) {
+      drawCenteredLabel('FINISH', 172, 42)
     }
   }
 

@@ -3,6 +3,9 @@ export const GROUND_Y = 0
 export const INITIAL_SPEED = 240
 export const SPEED_ACCELERATION = 4
 export const FIRST_OBSTACLE_X = 980
+export const ROUND_DURATION_SECONDS = 30
+export const CRASH_SLOWDOWN_FACTOR = 0.68
+export const CRASH_COOLDOWN_SECONDS = 0.75
 
 const GRAVITY = 2200
 const JUMP_VELOCITY = -820
@@ -35,10 +38,13 @@ export function createRunnerState({ seed = 1 } = {}) {
     seed: seed >>> 0 || 1,
     randomSeed,
     nextX,
+    elapsed: 0,
     distance: 0,
     score: 0,
     speed: INITIAL_SPEED,
     alive: true,
+    finished: false,
+    crashCooldown: 0,
     dino: {
       y: GROUND_Y,
       vy: 0,
@@ -50,7 +56,7 @@ export function createRunnerState({ seed = 1 } = {}) {
 }
 
 export function jump(state) {
-  if (!state.alive || state.dino.y !== GROUND_Y) return state
+  if (!state.alive || state.finished || state.dino.y !== GROUND_Y) return state
 
   return {
     ...state,
@@ -62,12 +68,17 @@ export function jump(state) {
 }
 
 export function stepRunner(state, dt) {
-  if (!state.alive) return state
+  if (!state.alive || state.finished) return state
 
-  const cappedDt = Math.max(0, Math.min(Number(dt) || 0, 0.05))
-  const speed = state.speed + SPEED_ACCELERATION * cappedDt
+  const requestedDt = Math.max(0, Math.min(Number(dt) || 0, 0.05))
+  const remaining = Math.max(0, ROUND_DURATION_SECONDS - (state.elapsed ?? 0))
+  const cappedDt = Math.min(requestedDt, remaining)
+  if (cappedDt <= 0) return { ...state, elapsed: ROUND_DURATION_SECONDS, finished: true }
+
+  let speed = state.speed + SPEED_ACCELERATION * cappedDt
   const distance = state.distance + speed * cappedDt
   const score = Math.floor(distance / 10)
+  const crashCooldown = Math.max(0, (state.crashCooldown ?? 0) - cappedDt)
 
   let y = state.dino.y + state.dino.vy * cappedDt
   let vy = state.dino.vy + GRAVITY * cappedDt
@@ -93,9 +104,11 @@ export function stepRunner(state, dt) {
     ...state,
     randomSeed,
     nextX,
+    elapsed: Math.min(ROUND_DURATION_SECONDS, (state.elapsed ?? 0) + cappedDt),
     distance,
     score,
     speed,
+    crashCooldown,
     dino: {
       ...state.dino,
       y,
@@ -104,8 +117,18 @@ export function stepRunner(state, dt) {
     obstacles,
   }
 
-  const alive = !obstacles.some((obstacle) => isColliding(getRunnerSnapshot(next), obstacle))
-  return { ...next, alive }
+  const collided = crashCooldown <= 0 && obstacles.some((obstacle) => isColliding(getRunnerSnapshot(next), obstacle))
+  if (collided) {
+    speed = Math.max(INITIAL_SPEED * 0.55, speed * CRASH_SLOWDOWN_FACTOR)
+  }
+
+  return {
+    ...next,
+    speed,
+    alive: true,
+    finished: next.elapsed >= ROUND_DURATION_SECONDS,
+    crashCooldown: collided ? CRASH_COOLDOWN_SECONDS : crashCooldown,
+  }
 }
 
 export function getRunnerSnapshot(state) {
@@ -120,6 +143,7 @@ export function getRunnerSnapshot(state) {
     speed: state.speed,
     distance: state.distance,
     alive: state.alive,
+    finished: state.finished,
   }
 }
 

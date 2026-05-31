@@ -3,6 +3,7 @@ import { normalizePlayerName } from './player.js'
 export const PLAYER_TTL_MS = 10_750
 export const COUNTDOWN_MS = 3_000
 export const START_EVENT_GRACE_MS = 10_000
+export const PLACEMENT_POINTS = [100, 50, 10]
 
 export function createLobbyState() {
   return {
@@ -17,6 +18,16 @@ export function sortPlayers(players) {
     if ((b.score ?? 0) !== (a.score ?? 0)) return (b.score ?? 0) - (a.score ?? 0)
     return a.name.localeCompare(b.name)
   })
+}
+
+export function awardRacePoints(players) {
+  return sortPlayers(players).map((player, index) => ({
+    pubkey: player.pubkey,
+    name: normalizePlayerName(player.name),
+    score: Math.max(0, Math.floor(Number(player.score) || 0)),
+    place: index + 1,
+    points: PLACEMENT_POINTS[index] ?? 1,
+  }))
 }
 
 export function recordPlayerUpdate(lobby, update, now = Date.now()) {

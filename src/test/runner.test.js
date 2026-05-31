@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DINO_X,
   INITIAL_SPEED,
+  ROUND_DURATION_SECONDS,
   createRunnerState,
   getRunnerSnapshot,
   isColliding,
@@ -41,13 +42,43 @@ describe('runner simulation', () => {
     expect(isColliding(getRunnerSnapshot(createRunnerState()), obstacle)).toBe(true)
   })
 
+  it('slows the dinosaur down on crash instead of ending the run', () => {
+    const state = {
+      ...createRunnerState({ seed: 1 }),
+      speed: 320,
+      obstacles: [{ x: DINO_X + 8, width: 28, height: 44, type: 'cactus' }],
+    }
+
+    const next = stepRunner(state, 1 / 60)
+
+    expect(next.alive).toBe(true)
+    expect(next.finished).toBe(false)
+    expect(next.speed).toBeLessThan(320)
+    expect(next.crashCooldown).toBeGreaterThan(0)
+  })
+
+  it('runs for exactly 30 seconds and then freezes progress', () => {
+    let state = createRunnerState({ seed: 1 })
+
+    for (let i = 0; i < (ROUND_DURATION_SECONDS + 1) * 60; i += 1) {
+      state = stepRunner(state, 1 / 60)
+    }
+
+    const finishedDistance = state.distance
+    const afterFinish = stepRunner(state, 1)
+
+    expect(state.finished).toBe(true)
+    expect(state.elapsed).toBe(ROUND_DURATION_SECONDS)
+    expect(afterFinish.distance).toBe(finishedDistance)
+  })
+
   it.each([1, 7, 42, 99, 12345])(
     'gives a novice jump strategy enough room to stay engaged for 30 seconds with seed %s',
     (seed) => {
       let state = createRunnerState({ seed })
       let elapsed = 0
 
-      for (let i = 0; i < 30 * 60 && state.alive; i += 1) {
+      for (let i = 0; i < 30 * 60 && !state.finished; i += 1) {
         const nextObstacle = state.obstacles.find((obstacle) => obstacle.x + obstacle.width > DINO_X)
         if (nextObstacle && nextObstacle.x - DINO_X < 132 && state.dino.y === 0) {
           state = jump(state)
@@ -58,6 +89,7 @@ describe('runner simulation', () => {
 
       expect(elapsed).toBeGreaterThan(29.9)
       expect(state.alive).toBe(true)
+      expect(state.finished).toBe(true)
       expect(state.speed).toBeLessThan(400)
     },
   )

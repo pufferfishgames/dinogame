@@ -3,6 +3,7 @@ import {
   activeRacers,
   canStartRace,
   createLobbyState,
+  awardRacePoints,
   prunePlayers,
   raceStartControl,
   recordPlayerUpdate,
@@ -92,5 +93,23 @@ describe('multiplayer lobby', () => {
 
     expect(shouldApplyRaceStart(lobby, { id: 'old-race', startAt: 10_000 }, 130_000)).toBe(false)
     expect(shouldApplyRaceStart(lobby, { id: 'fresh-race', startAt: 126_000 }, 130_000)).toBe(true)
+  })
+
+  it('awards final race points by placement', () => {
+    const awards = awardRacePoints([
+      { pubkey: 'a', name: 'ALICE', score: 930 },
+      { pubkey: 'b', name: 'BOB', score: 1100 },
+      { pubkey: 'c', name: 'CARA', score: 820 },
+      { pubkey: 'd', name: 'DREW', score: 700 },
+      { pubkey: 'e', name: 'ELI', score: 100 },
+    ])
+
+    expect(awards.map((award) => [award.name, award.place, award.points])).toEqual([
+      ['BOB', 1, 100],
+      ['ALICE', 2, 50],
+      ['CARA', 3, 10],
+      ['DREW', 4, 1],
+      ['ELI', 5, 1],
+    ])
   })
 })
