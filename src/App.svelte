@@ -19,6 +19,7 @@
   } from './game/multiplayer.js'
   import { connectionLabel, connectionTone } from './game/connectivity.js'
   import { normalizeEditablePlayerName, normalizePlayerName } from './game/player.js'
+  import { playerColorForName } from './game/playerColors.js'
   import { getOrCreateSessionPassphrase } from './game/joining.js'
   import { buildRemotePlayerSprites } from './game/remotePlayers.js'
   import { ROUND_DURATION_SECONDS, createRunnerState, estimateFinishDistance, jump, stepRunner } from './game/runner.js'
@@ -78,6 +79,7 @@
 
   $: competitors = lobby.players
   $: localDisplayName = normalizePlayerName(playerName)
+  $: localPlayerColor = playerColorForName(localDisplayName)
   $: localPlayer = findPlayerForPubkeyOrName(competitors, pubkey, localDisplayName)
   $: rankedPlayers = sortPlayers(competitors.map((p) => isLocalPlayer(p) ? {
     ...p,
@@ -1078,8 +1080,8 @@
     ctx.save()
     ctx.globalAlpha = sprite.state === 'crashed' ? 0.5 : 0.9
     drawChromeDinoShape(sprite.x, sprite.y, {
-      color: '#315a86',
-      accent: '#93d0c2',
+      color: sprite.color,
+      accent: sprite.accent,
       scale: 0.82,
       hat: sprite.pubkey === winningPubkey,
     })
@@ -1113,8 +1115,8 @@
     ctx.translate(-22, -24)
 
     drawChromeDinoShape(0, 0, {
-      color: runner.alive ? '#243f32' : '#7c2f2f',
-      accent: '#d95f43',
+      color: runner.alive ? localPlayerColor.body : '#7c2f2f',
+      accent: localPlayerColor.accent,
       hat: localIsWinning,
     })
     ctx.restore()
@@ -1291,7 +1293,10 @@
       <ol class="player-list">
         {#each lobbyDisplay as player (player.name)}
           <li class:mine={isLocalPlayer(player)} class:pre-join={player.preJoin}>
-            <span>{player.name}</span>
+            <span class="player-name">
+              <i class="player-swatch" style:background-color={playerColorForName(player.name).body}></i>
+              {player.name}
+            </span>
             <strong>{player.score}</strong>
           </li>
         {:else}

@@ -347,6 +347,21 @@ h2 {
   color: #d95f43;
 }
 
+.player-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.player-swatch {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(16, 32, 24, 0.72);
+  border-radius: 3px;
+}
+
 .muted-row {
   color: #7a827d;
 }

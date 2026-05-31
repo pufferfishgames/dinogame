@@ -1,5 +1,6 @@
 import { DINO_X } from './runner.js'
 import { normalizePlayerName } from './player.js'
+import { playerColorForName } from './playerColors.js'
 
 const REMOTE_DINO_WIDTH = 38
 const TRACK_WIDTH = 920
@@ -42,10 +43,13 @@ export function buildRemotePlayerSprites({
       const laneOffset = LANE_OFFSETS[index % LANE_OFFSETS.length]
       const jumpY = clampJumpY(player.jumpY)
       const x = DINO_X + progressDelta
+      const colors = playerColorForName(player.name)
 
       return {
         pubkey: player.pubkey,
         name: normalizePlayerName(player.name),
+        color: colors.body,
+        accent: colors.accent,
         score,
         distance,
         observedDistance,

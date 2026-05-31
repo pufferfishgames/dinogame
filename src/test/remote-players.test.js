@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { playerColorForName } from '../game/playerColors.js'
 import { buildRemotePlayerSprites } from '../game/remotePlayers.js'
 
 describe('remote player sprites', () => {
@@ -16,6 +17,10 @@ describe('remote player sprites', () => {
     expect(sprites.map((sprite) => sprite.name)).toEqual(['BOB', 'CARA'])
     expect(sprites.every((sprite) => sprite.pubkey !== 'local')).toBe(true)
     expect(sprites.every((sprite) => Number.isFinite(sprite.x) && Number.isFinite(sprite.y))).toBe(true)
+    expect(sprites[0]).toMatchObject({
+      color: playerColorForName('BOB').body,
+      accent: playerColorForName('BOB').accent,
+    })
   })
 
   it('places racing players relative to local progress and staggers lanes', () => {
