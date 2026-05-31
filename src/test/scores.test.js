@@ -47,6 +47,7 @@ describe('Nostr score events', () => {
     const event = createSessionEvent('pubkey', {
       name: 'BOB',
       score: 42,
+      distance: 429.7,
       state: 'racing',
       jumpY: -64.4,
       race: { id: 'race-1' },
@@ -56,6 +57,7 @@ describe('Nostr score events', () => {
       pubkey: 'pubkey',
       name: 'BOB',
       score: 42,
+      distance: 429.7,
       state: 'racing',
       jumpY: -64,
       race: { id: 'race-1' },

@@ -13,6 +13,7 @@ export function mergeNostrUpdate(existing, update, { isPeerConnected = false } =
     score: update.score,
     state: isPeerConnected && existing ? existing.state : update.state,
     jumpY: isPeerConnected && existing ? existing.jumpY : update.jumpY,
+    distance: isPeerConnected && existing ? existing.distance : update.distance,
   }
 }
 
@@ -27,6 +28,7 @@ export function createLobbyState() {
 export function sortPlayers(players) {
   return [...players].sort((a, b) => {
     if ((b.score ?? 0) !== (a.score ?? 0)) return (b.score ?? 0) - (a.score ?? 0)
+    if ((b.distance ?? 0) !== (a.distance ?? 0)) return (b.distance ?? 0) - (a.distance ?? 0)
     return a.name.localeCompare(b.name)
   })
 }
@@ -55,11 +57,13 @@ export function canFinalizeRace(
 
 export function recordPlayerUpdate(lobby, update, now = Date.now()) {
   if (!update?.pubkey) return lobby
+  const score = Math.max(0, Math.floor(Number(update.score) || 0))
 
   const nextPlayer = {
     pubkey: update.pubkey,
     name: normalizePlayerName(update.name),
-    score: Math.max(0, Math.floor(Number(update.score) || 0)),
+    score,
+    distance: normalizeDistance(update.distance, score),
     state: update.state ?? 'lobby',
     jumpY: clampJumpY(update.jumpY),
     lastSeen: now,
@@ -168,4 +172,10 @@ export function makeRaceSeed(value, now = Date.now()) {
 function clampJumpY(value) {
   const y = Math.round(Number(value) || 0)
   return Math.max(-180, Math.min(0, y))
+}
+
+function normalizeDistance(distance, score = 0) {
+  const value = Number(distance)
+  if (Number.isFinite(value)) return Math.max(0, value)
+  return Math.max(0, Math.floor(Number(score) || 0) * 10)
 }

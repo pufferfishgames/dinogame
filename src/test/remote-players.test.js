@@ -33,6 +33,25 @@ describe('remote player sprites', () => {
     expect(sprites[0].y).not.toBe(sprites[1].y)
   })
 
+  it('uses exact distance so overtakes move across the local dinosaur', () => {
+    const [behind] = buildRemotePlayerSprites({
+      players: [{ pubkey: 'remote', name: 'BOB', score: 100, distance: 990, state: 'racing' }],
+      localPubkey: 'local',
+      localScore: 100,
+      localDistance: 1_000,
+    })
+    const [ahead] = buildRemotePlayerSprites({
+      players: [{ pubkey: 'remote', name: 'BOB', score: 100, distance: 1_040, state: 'racing' }],
+      localPubkey: 'local',
+      localScore: 100,
+      localDistance: 1_000,
+    })
+
+    expect(behind.x).toBeLessThan(96)
+    expect(ahead.x).toBeGreaterThan(96)
+    expect(ahead.x - behind.x).toBeCloseTo(50, 0)
+  })
+
   it('moves a remote player upward when their presence reports a jump', () => {
     const [grounded] = buildRemotePlayerSprites({
       players: [{ pubkey: 'b', name: 'BOB', score: 120, state: 'racing', jumpY: 0 }],

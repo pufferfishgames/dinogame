@@ -28,4 +28,8 @@ describe('product copy', () => {
     expect(app).toContain("let playerName = ''")
     expect(app).not.toContain("let playerName = 'DINO'")
   })
+
+  it('does not render a manual join button', () => {
+    expect(app).not.toContain('>Join</button>')
+  })
 })

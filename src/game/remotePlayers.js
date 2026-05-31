@@ -10,23 +10,27 @@ export function buildRemotePlayerSprites({
   players,
   localPubkey,
   localScore = 0,
+  localDistance,
   trackWidth = TRACK_WIDTH,
 } = {}) {
+  const localProgress = normalizeDistance(localDistance, localScore)
+
   return [...(players ?? [])]
     .filter((player) => player?.pubkey && player.pubkey !== localPubkey)
     .map((player, index) => {
       const score = Math.max(0, Math.floor(Number(player.score) || 0))
-      const progressDelta = score - Math.max(0, Math.floor(Number(localScore) || 0))
+      const distance = normalizeDistance(player.distance, score)
+      const progressDelta = distance - localProgress
       const laneOffset = LANE_OFFSETS[index % LANE_OFFSETS.length]
-      const stagger = (index % 3) * 18
       const jumpY = clampJumpY(player.jumpY)
 
       return {
         pubkey: player.pubkey,
         name: normalizePlayerName(player.name),
         score,
+        distance,
         state: player.state ?? 'lobby',
-        x: clamp(DINO_X + 78 + progressDelta * 1.35 + stagger, 24, trackWidth - REMOTE_DINO_WIDTH - 20),
+        x: clamp(DINO_X + progressDelta, 24, trackWidth - REMOTE_DINO_WIDTH - 20),
         y: BASE_Y + laneOffset + jumpY,
         jumpY,
         width: REMOTE_DINO_WIDTH,
@@ -35,6 +39,7 @@ export function buildRemotePlayerSprites({
     })
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
+      if (b.distance !== a.distance) return b.distance - a.distance
       return a.name.localeCompare(b.name)
     })
 }
@@ -46,4 +51,10 @@ function clamp(value, min, max) {
 function clampJumpY(value) {
   const y = Math.round(Number(value) || 0)
   return Math.max(-180, Math.min(0, y))
+}
+
+function normalizeDistance(distance, score = 0) {
+  const value = Number(distance)
+  if (Number.isFinite(value)) return Math.max(0, value)
+  return Math.max(0, Math.floor(Number(score) || 0) * 10)
 }

@@ -40,6 +40,7 @@ export function createSessionEvent(pubkey, payload, { now = Math.floor(Date.now(
       type: payload.type ?? 'presence',
       name: normalizePlayerName(payload.name),
       score: Math.max(0, Math.floor(Number(payload.score) || 0)),
+      distance: normalizeDistance(payload.distance, payload.score),
       state: payload.state ?? 'lobby',
       jumpY: clampJumpY(payload.jumpY),
       race: payload.race ?? null,
@@ -90,6 +91,7 @@ export function parseSessionEvent(event) {
     type: payload.type ?? 'presence',
     name: normalizePlayerName(payload.name),
     score: Math.max(0, Math.floor(Number(payload.score) || 0)),
+    distance: normalizeDistance(payload.distance, payload.score),
     state: payload.state ?? 'lobby',
     jumpY: clampJumpY(payload.jumpY),
     race: payload.race ?? null,
@@ -186,4 +188,10 @@ function hasTag(event, key, value) {
 function clampJumpY(value) {
   const y = Math.round(Number(value) || 0)
   return Math.max(-180, Math.min(0, y))
+}
+
+function normalizeDistance(distance, score = 0) {
+  const value = Number(distance)
+  if (Number.isFinite(value)) return Math.max(0, value)
+  return Math.max(0, Math.floor(Number(score) || 0) * 10)
 }

@@ -16,16 +16,20 @@ export function shouldOfferConnection(localPubkey, remotePubkey) {
 export function createRealtimeUpdate({
   name,
   score = 0,
+  distance,
   state = 'lobby',
   jumpY = 0,
   raceId = '',
   elapsed = 0,
   seq = 0,
 } = {}) {
+  const normalizedScore = Math.max(0, Math.floor(Number(score) || 0))
+
   return {
     type: 'state',
     name: normalizePlayerName(name),
-    score: Math.max(0, Math.floor(Number(score) || 0)),
+    score: normalizedScore,
+    distance: normalizeDistance(distance, normalizedScore),
     state: String(state || 'lobby'),
     jumpY: clampJumpY(jumpY),
     raceId: String(raceId ?? ''),
@@ -267,4 +271,10 @@ function closePeer(peer) {
 function clampJumpY(value) {
   const y = Math.round(Number(value) || 0)
   return Math.max(-180, Math.min(0, y))
+}
+
+function normalizeDistance(distance, score = 0) {
+  const value = Number(distance)
+  if (Number.isFinite(value)) return Math.max(0, value)
+  return Math.max(0, Math.floor(Number(score) || 0) * 10)
 }

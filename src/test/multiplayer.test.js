@@ -15,11 +15,12 @@ import {
 
 describe('multiplayer lobby', () => {
   it('preserves WebRTC position state when a stale Nostr update arrives for a connected peer', () => {
-    const existing = { state: 'racing', jumpY: -80 }
-    const nostrUpdate = { pubkey: 'a', name: 'ALICE', score: 100, state: 'lobby', jumpY: 0 }
+    const existing = { state: 'racing', jumpY: -80, distance: 1_200 }
+    const nostrUpdate = { pubkey: 'a', name: 'ALICE', score: 100, state: 'lobby', jumpY: 0, distance: 1_000 }
     const merged = mergeNostrUpdate(existing, nostrUpdate, { isPeerConnected: true })
     expect(merged.state).toBe('racing')
     expect(merged.jumpY).toBe(-80)
+    expect(merged.distance).toBe(1_200)
     expect(merged.name).toBe('ALICE')
     expect(merged.score).toBe(100)
   })
@@ -29,6 +30,17 @@ describe('multiplayer lobby', () => {
     const merged = mergeNostrUpdate(null, nostrUpdate, { isPeerConnected: false })
     expect(merged.state).toBe('lobby')
     expect(merged.jumpY).toBe(0)
+  })
+
+  it('stores exact distance and uses it to break score ties', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 100, distance: 1_004 }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'b', name: 'BOB', score: 100, distance: 1_043 }, 1000)
+
+    expect(lobby.players.map((player) => [player.name, player.distance])).toEqual([
+      ['BOB', 1_043],
+      ['ALICE', 1_004],
+    ])
   })
 
   it('allows the start button to launch a single-player race', () => {

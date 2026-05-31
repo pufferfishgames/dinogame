@@ -24,6 +24,7 @@ describe('WebRTC realtime helpers', () => {
     const raw = serializeRealtimeMessage({
       name: 'runnerrex',
       score: 42.9,
+      distance: 429.7,
       state: 'racing',
       jumpY: -64.4,
       raceId: 'race-1',
@@ -35,6 +36,7 @@ describe('WebRTC realtime helpers', () => {
       pubkey: 'remote',
       name: 'RUNNERR',
       score: 42,
+      distance: 429.7,
       state: 'racing',
       jumpY: -64,
       raceId: 'race-1',

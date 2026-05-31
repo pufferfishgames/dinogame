@@ -14,7 +14,7 @@
     startRace,
   } from './game/multiplayer.js'
   import { connectionLabel, connectionTone } from './game/connectivity.js'
-  import { normalizeEditablePlayerName, normalizePlayerName } from './game/player.js'
+  import { normalizeEditablePlayerName } from './game/player.js'
   import { getOrCreateSessionPassphrase } from './game/joining.js'
   import { buildRemotePlayerSprites } from './game/remotePlayers.js'
   import { ROUND_DURATION_SECONDS, createRunnerState, jump, stepRunner } from './game/runner.js'
@@ -69,10 +69,8 @@
 
   $: competitors = lobby.players
   $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
-  $: rankedPlayers = sortPlayers(competitors.map((p) => p.pubkey === pubkey ? { ...p, score: runner.score } : p))
-  $: lobbyDisplay = joined
-    ? competitors.slice(0, 10)
-    : [...competitors.slice(0, 9), { pubkey, name: normalizePlayerName(playerName) || 'DINO', score: 0, preJoin: true }]
+  $: rankedPlayers = sortPlayers(competitors.map((p) => p.pubkey === pubkey ? { ...p, score: runner.score, distance: runner.distance } : p))
+  $: lobbyDisplay = competitors.slice(0, 10)
   $: raceControl = raceStartControl(lobby, pubkey, { joined, runnerAlive: !runner.finished })
   $: canRequestRaceStart = raceControl.canStart
   $: raceButtonLabel = raceControl.label
@@ -81,6 +79,7 @@
     players: competitors,
     localPubkey: pubkey,
     localScore: runner.score,
+    localDistance: runner.distance,
     trackWidth: VIEW_WIDTH,
   })
   $: waitingForPlayers = joined && competitors.length < 2 && lobby.phase === 'idle' && relayStatus === 'connecting'
@@ -95,6 +94,7 @@
     restoreIdentity()
     playerName = restorePlayerName()
     localTotal = readStoredNumber(TOTAL_KEY)
+    joinOnlinePlayer()
     ctx = canvas.getContext('2d')
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
@@ -133,9 +133,10 @@
     }
   }
 
-  function joinLobby() {
+  function joinOnlinePlayer() {
+    if (joined) return
     const editableName = normalizeEditablePlayerName(playerName)
-    playerName = normalizePlayerName(editableName)
+    playerName = editableName
     if (editableName) writeStoredValue(NAME_KEY, editableName)
     joined = true
     lobby = recordPlayerUpdate(lobby, localPresence('lobby'), Date.now())
@@ -145,6 +146,10 @@
   function handleNameInput(event) {
     playerName = normalizeEditablePlayerName(event.currentTarget.value)
     event.currentTarget.value = playerName
+    writeStoredValue(NAME_KEY, playerName)
+    if (joined) {
+      publishPresence(lobby.phase === 'racing' ? runner.finished ? 'finished' : 'racing' : 'lobby')
+    }
   }
 
   function connectSession() {
@@ -264,6 +269,7 @@
         type,
         name: playerName,
         score: runner.score,
+        distance: runner.distance,
         state,
         jumpY: runner.dino.y,
         race,
@@ -279,6 +285,7 @@
     return realtime.broadcast(createRealtimeUpdate({
       name: playerName,
       score: runner.score,
+      distance: runner.distance,
       state,
       jumpY: runner.dino.y,
       raceId: lobby.race?.id ?? '',
@@ -292,6 +299,7 @@
       pubkey,
       name: playerName,
       score: runner.score,
+      distance: runner.distance,
       state,
       jumpY: runner.dino.y,
     }
@@ -930,13 +938,9 @@
         />
       </label>
 
-      {#if !joined}
-        <button class="primary-action" on:click={joinLobby}>Join</button>
-      {:else}
-        <button class="primary-action" disabled={!canRequestRaceStart} on:click={beginRace}>
-          {raceButtonLabel}
-        </button>
-      {/if}
+      <button class="primary-action" disabled={!canRequestRaceStart} on:click={beginRace}>
+        {raceButtonLabel}
+      </button>
 
       <div class="total-box">
         <span>Total</span>
