@@ -5,7 +5,10 @@
     awardRacePoints,
     canFinalizeRace,
     createLobbyState,
+    findPlayerForPubkeyOrName,
     mergeNostrUpdate,
+    playerAwardMatches,
+    playerIncludesPubkey,
     prunePlayers,
     raceStartControl,
     recordPlayerUpdate,
@@ -14,7 +17,7 @@
     startRace,
   } from './game/multiplayer.js'
   import { connectionLabel, connectionTone } from './game/connectivity.js'
-  import { normalizeEditablePlayerName } from './game/player.js'
+  import { normalizeEditablePlayerName, normalizePlayerName } from './game/player.js'
   import { getOrCreateSessionPassphrase } from './game/joining.js'
   import { buildRemotePlayerSprites } from './game/remotePlayers.js'
   import { ROUND_DURATION_SECONDS, createRunnerState, jump, stepRunner } from './game/runner.js'
@@ -73,8 +76,14 @@
   let realtimePeers = 0
 
   $: competitors = lobby.players
-  $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
-  $: rankedPlayers = sortPlayers(competitors.map((p) => p.pubkey === pubkey ? { ...p, score: runner.score, distance: runner.distance } : p))
+  $: localDisplayName = normalizePlayerName(playerName)
+  $: localPlayer = findPlayerForPubkeyOrName(competitors, pubkey, localDisplayName)
+  $: rankedPlayers = sortPlayers(competitors.map((p) => isLocalPlayer(p) ? {
+    ...p,
+    pubkey,
+    score: Math.max(p.score ?? 0, runner.score),
+    distance: Math.max(p.distance ?? 0, runner.distance),
+  } : p))
   $: lobbyDisplay = competitors.slice(0, 10)
   $: raceControl = raceStartControl(lobby, pubkey, { joined, runnerAlive: !runner.finished })
   $: canRequestRaceStart = raceControl.canStart
@@ -83,6 +92,7 @@
   $: remotePlayerSprites = buildRemotePlayerSprites({
     players: competitors,
     localPubkey: pubkey,
+    localName: localDisplayName,
     localScore: runner.score,
     localDistance: runner.distance,
     trackWidth: VIEW_WIDTH,
@@ -91,7 +101,9 @@
   $: relayLabel = connectionLabel(relayStatus, joined)
   $: relayTone = connectionTone(relayStatus, joined)
   $: liveLabel = realtimePeers > 0 ? `P2P ${realtimePeers}` : relayLabel
-  $: winningPubkey = lobby.phase === 'racing' || runner.finished ? rankedPlayers[0]?.pubkey ?? '' : ''
+  $: winningPlayer = lobby.phase === 'racing' || runner.finished ? rankedPlayers[0] : null
+  $: winningPubkey = winningPlayer?.pubkey ?? ''
+  $: localIsWinning = Boolean(winningPlayer && isLocalPlayer(winningPlayer))
   $: countdown = lobby.race && lobby.phase === 'countdown'
     ? Math.max(0, Math.ceil((lobby.race.startAt - Date.now()) / 1000))
     : 0
@@ -216,7 +228,7 @@
       applyIncomingRace(update.race)
     }
 
-    const existing = lobby.players.find((p) => p.pubkey === update.pubkey)
+    const existing = findPlayerForPubkeyOrName(lobby.players, update.pubkey, update.name)
     const isPeerConnected = realtime?.isPeerConnected(update.pubkey) ?? false
     const nextLobby = recordPlayerUpdate(
       lobby,
@@ -344,6 +356,10 @@
     }
   }
 
+  function isLocalPlayer(player) {
+    return playerIncludesPubkey(player, pubkey) || player?.name === localDisplayName
+  }
+
   function handleKeydown(event) {
     if (event.code === 'Space' || event.code === 'ArrowUp' || event.code === 'KeyW') {
       event.preventDefault()
@@ -401,7 +417,7 @@
   async function submitRacePoints() {
     if (!lobby.race || latestSubmittedRace === lobby.race.id) return
     latestSubmittedRace = lobby.race.id
-    const award = awardRacePoints(lobby.players).find((entry) => entry.pubkey === pubkey)
+    const award = awardRacePoints(lobby.players).find((entry) => playerAwardMatches(entry, pubkey, localDisplayName))
     const points = award?.points ?? 100
 
     localTotal += points
@@ -958,7 +974,7 @@
     drawChromeDinoShape(0, 0, {
       color: runner.alive ? '#243f32' : '#7c2f2f',
       accent: '#d95f43',
-      hat: winningPubkey === pubkey,
+      hat: localIsWinning,
     })
     ctx.restore()
   }
@@ -1133,7 +1149,7 @@
       </div>
       <ol class="player-list">
         {#each lobbyDisplay as player}
-          <li class:mine={player.pubkey === pubkey} class:pre-join={player.preJoin}>
+          <li class:mine={isLocalPlayer(player)} class:pre-join={player.preJoin}>
             <span>{player.name}</span>
             <strong>{player.score}</strong>
           </li>

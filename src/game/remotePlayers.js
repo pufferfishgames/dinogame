@@ -9,15 +9,21 @@ const LANE_OFFSETS = [0, -24, 20, -42, 38, -60, 56]
 export function buildRemotePlayerSprites({
   players,
   localPubkey,
+  localName,
   localScore = 0,
   localDistance,
   trackWidth = TRACK_WIDTH,
 } = {}) {
   const localProgress = normalizeDistance(localDistance, localScore)
   const hasLocalDistance = Number.isFinite(Number(localDistance))
+  const normalizedLocalName = normalizePlayerName(localName)
 
   return [...(players ?? [])]
-    .filter((player) => player?.pubkey && player.pubkey !== localPubkey)
+    .filter((player) =>
+      player?.pubkey &&
+      !playerIncludesPubkey(player, localPubkey) &&
+      normalizePlayerName(player.name) !== normalizedLocalName,
+    )
     .map((player, index) => {
       const score = Math.max(0, Math.floor(Number(player.score) || 0))
       const hasExactDistance = hasLocalDistance || Number.isFinite(Number(player.distance))
@@ -50,6 +56,14 @@ export function buildRemotePlayerSprites({
       if (b.distance !== a.distance) return b.distance - a.distance
       return a.name.localeCompare(b.name)
     })
+}
+
+function playerIncludesPubkey(player, pubkey) {
+  return Boolean(
+    player?.pubkey === pubkey ||
+    player?.pubkeys?.includes?.(pubkey) ||
+    Object.hasOwn(player?.seqByPubkey ?? {}, pubkey),
+  )
 }
 
 function clamp(value, min, max) {

@@ -81,4 +81,32 @@ describe('remote player sprites', () => {
 
     expect(sprites.map((sprite) => sprite.pubkey)).toEqual(['near'])
   })
+
+  it('does not render a merged same-name local player as a remote dinosaur', () => {
+    const sprites = buildRemotePlayerSprites({
+      players: [
+        { pubkey: 'new-tab', pubkeys: ['old-tab', 'new-tab'], name: 'ALICE', score: 120, state: 'racing' },
+        { pubkey: 'b', name: 'BOB', score: 100, state: 'racing' },
+      ],
+      localPubkey: 'old-tab',
+      localName: 'ALICE',
+      localScore: 120,
+    })
+
+    expect(sprites.map((sprite) => sprite.name)).toEqual(['BOB'])
+  })
+
+  it('treats matching names as the same local dinosaur even with a different pubkey', () => {
+    const sprites = buildRemotePlayerSprites({
+      players: [
+        { pubkey: 'same-name', name: 'ALICE', score: 120, state: 'racing' },
+        { pubkey: 'b', name: 'BOB', score: 100, state: 'racing' },
+      ],
+      localPubkey: 'local',
+      localName: 'ALICE',
+      localScore: 120,
+    })
+
+    expect(sprites.map((sprite) => sprite.name)).toEqual(['BOB'])
+  })
 })

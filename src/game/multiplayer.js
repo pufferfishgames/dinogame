@@ -59,24 +59,51 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
   if (!update?.pubkey) return lobby
   const score = Math.max(0, Math.floor(Number(update.score) || 0))
   const seq = Math.max(0, Math.floor(Number(update.seq) || 0))
-  const existing = new Map(lobby.players.map((player) => [player.pubkey, player]))
-  const previous = existing.get(update.pubkey)
-  const previousSeq = previous?.seq ?? 0
+  const name = normalizePlayerName(update.name)
+  const existing = new Map(lobby.players.map((player) => [player.name, player]))
+  let previous = findPlayerByPubkey(lobby.players, update.pubkey)
+  const previousSeq = previous?.seqByPubkey?.[update.pubkey] ?? previous?.seq ?? 0
 
   if (seq > 0 && previousSeq >= seq) return lobby
 
-  const nextPlayer = {
-    pubkey: update.pubkey,
-    name: normalizePlayerName(update.name),
-    score,
-    distance: normalizeDistance(update.distance, score),
-    state: update.state ?? 'lobby',
-    jumpY: clampJumpY(update.jumpY),
-    seq: Math.max(previousSeq, seq),
-    lastSeen: now,
+  if (previous && previous.name !== name) {
+    const nextPrevious = removePubkeyFromPlayer(previous, update.pubkey)
+    if (nextPrevious) existing.set(nextPrevious.name, nextPrevious)
+    else existing.delete(previous.name)
+    previous = null
   }
 
-  existing.set(nextPlayer.pubkey, { ...existing.get(nextPlayer.pubkey), ...nextPlayer })
+  const sameNamePlayer = existing.get(name)
+  const mergedWith = sameNamePlayer ?? previous
+
+  const pubkeys = mergeUnique([...(mergedWith?.pubkeys ?? [mergedWith?.pubkey]), update.pubkey])
+  const nextPlayer = {
+    ...mergePlayerProgress(mergedWith, {
+      score,
+      distance: normalizeDistance(update.distance, score),
+      state: update.state ?? 'lobby',
+      jumpY: clampJumpY(update.jumpY),
+      lastSeen: now,
+      pubkey: update.pubkey,
+    }),
+    name,
+    pubkey: choosePrimaryPubkey(mergedWith, update.pubkey, now),
+    pubkeys,
+    state: update.state ?? 'lobby',
+    jumpY: clampJumpY(update.jumpY),
+    seq,
+    seqByPubkey: {
+      ...(mergedWith?.seqByPubkey ?? (mergedWith?.pubkey ? { [mergedWith.pubkey]: mergedWith.seq ?? 0 } : {})),
+      [update.pubkey]: Math.max(previousSeq, seq),
+    },
+    lastSeenByPubkey: {
+      ...(mergedWith?.lastSeenByPubkey ?? (mergedWith?.pubkey ? { [mergedWith.pubkey]: mergedWith.lastSeen ?? now } : {})),
+      [update.pubkey]: now,
+    },
+    controlledBy: pubkeys.length,
+  }
+
+  existing.set(name, nextPlayer)
 
   return {
     ...lobby,
@@ -84,17 +111,143 @@ export function recordPlayerUpdate(lobby, update, now = Date.now()) {
   }
 }
 
+function mergePlayerProgress(existing, update) {
+  if (!existing) {
+    return {
+      score: update.score,
+      distance: update.distance,
+      lastSeen: update.lastSeen,
+    }
+  }
+
+  const existingScore = Math.max(0, Math.floor(Number(existing.score) || 0))
+  const existingDistance = normalizeDistance(existing.distance, existingScore)
+  const nextDistance = Math.max(existingDistance, update.distance)
+  const nextScore = Math.max(existingScore, update.score)
+
+  return {
+    score: nextScore,
+    distance: nextDistance,
+    lastSeen: Math.max(existing.lastSeen ?? 0, update.lastSeen),
+  }
+}
+
+function findPlayerByPubkey(players, pubkey) {
+  return players.find((player) =>
+    player.pubkey === pubkey ||
+    player.pubkeys?.includes?.(pubkey) ||
+    Object.hasOwn(player.seqByPubkey ?? {}, pubkey),
+  )
+}
+
+function removePubkeyFromPlayer(player, pubkey) {
+  const pubkeys = (player.pubkeys ?? [player.pubkey]).filter((value) => value && value !== pubkey)
+  if (!pubkeys.length) return null
+
+  const seqByPubkey = { ...(player.seqByPubkey ?? {}) }
+  const lastSeenByPubkey = { ...(player.lastSeenByPubkey ?? {}) }
+  delete seqByPubkey[pubkey]
+  delete lastSeenByPubkey[pubkey]
+  const pubkeyEntries = Object.keys(lastSeenByPubkey).length ? lastSeenByPubkey : Object.fromEntries(pubkeys.map((value) => [value, player.lastSeen ?? 0]))
+  const primaryPubkey = pubkeys.reduce((best, value) =>
+    (pubkeyEntries[value] ?? 0) >= (pubkeyEntries[best] ?? 0) ? value : best,
+  pubkeys[0])
+
+  return {
+    ...player,
+    pubkey: primaryPubkey,
+    pubkeys,
+    seqByPubkey,
+    lastSeenByPubkey: pubkeyEntries,
+    controlledBy: pubkeys.length,
+  }
+}
+
+function prunePlayerPubkeys(player, now, ttlMs) {
+  if (!player.lastSeenByPubkey) {
+    return now - player.lastSeen <= ttlMs ? player : null
+  }
+
+  const activeEntries = Object.entries(player.lastSeenByPubkey)
+    .filter(([, lastSeen]) => now - lastSeen <= ttlMs)
+  if (!activeEntries.length) return null
+
+  const activePubkeys = new Set(activeEntries.map(([pubkey]) => pubkey))
+  const pubkeys = (player.pubkeys ?? [player.pubkey]).filter((pubkey) => activePubkeys.has(pubkey))
+  const lastSeenByPubkey = Object.fromEntries(activeEntries)
+  const seqByPubkey = Object.fromEntries(
+    Object.entries(player.seqByPubkey ?? {}).filter(([pubkey]) => activePubkeys.has(pubkey)),
+  )
+  const primaryPubkey = activeEntries.reduce((best, entry) =>
+    entry[1] >= best[1] ? entry : best,
+  activeEntries[0])[0]
+  const lastSeen = Math.max(...activeEntries.map(([, seen]) => seen))
+
+  return {
+    ...player,
+    pubkey: primaryPubkey,
+    pubkeys,
+    seqByPubkey,
+    lastSeenByPubkey,
+    lastSeen,
+    controlledBy: pubkeys.length,
+  }
+}
+
+function choosePrimaryPubkey(existing, pubkey, now) {
+  if (!existing) return pubkey
+  const currentSeen = existing.lastSeenByPubkey?.[existing.pubkey] ?? existing.lastSeen ?? 0
+  return now >= currentSeen ? pubkey : existing.pubkey
+}
+
+function mergeUnique(values) {
+  return [...new Set(values.filter(Boolean))]
+}
+
+export function playerIncludesPubkey(player, pubkey) {
+  return Boolean(
+    player?.pubkey === pubkey ||
+    player?.pubkeys?.includes?.(pubkey) ||
+    Object.hasOwn(player?.seqByPubkey ?? {}, pubkey),
+  )
+}
+
+export function playerNameMatches(player, name) {
+  return normalizePlayerName(player?.name) === normalizePlayerName(name)
+}
+
+export function findPlayerForPubkeyOrName(players, pubkey, name) {
+  return players.find((player) => playerIncludesPubkey(player, pubkey)) ??
+    players.find((player) => playerNameMatches(player, name))
+}
+
+export function playerIsActiveExcept(player, pubkey) {
+  return player.state === 'racing' && !playerIncludesPubkey(player, pubkey)
+}
+
+export function playerAwardMatches(award, pubkey, name) {
+  return award.pubkey === pubkey || playerNameMatches(award, name)
+}
+
+export function mergeLobbyPlayersByName(lobby) {
+  let next = { ...lobby, players: [] }
+  for (const player of lobby.players) {
+    next = recordPlayerUpdate(next, player, player.lastSeen ?? Date.now())
+  }
+  return next
+}
+
 export function prunePlayers(lobby, now = Date.now(), ttlMs = PLAYER_TTL_MS) {
   return {
     ...lobby,
-    players: sortPlayers(lobby.players.filter((player) => now - player.lastSeen <= ttlMs)),
+    players: sortPlayers(lobby.players.map((player) => prunePlayerPubkeys(player, now, ttlMs)).filter(Boolean)),
   }
 }
 
 export function activeRacers(lobby, { exceptPubkey } = {}) {
   return lobby.players.filter((player) =>
     player.state === 'racing' &&
-    player.pubkey !== exceptPubkey,
+    !playerIncludesPubkey(player, exceptPubkey),
   )
 }
 

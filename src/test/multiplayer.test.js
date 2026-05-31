@@ -54,6 +54,64 @@ describe('multiplayer lobby', () => {
     })
   })
 
+  it('merges refreshed tabs that use the same display name', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'old-tab', name: 'ALICE', score: 80, distance: 800 }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'new-tab', name: 'ALICE', score: 90, distance: 900 }, 1200)
+
+    expect(lobby.players).toHaveLength(1)
+    expect(lobby.players[0]).toMatchObject({
+      name: 'ALICE',
+      pubkey: 'new-tab',
+      score: 90,
+      distance: 900,
+      controlledBy: 2,
+    })
+    expect(lobby.players[0].pubkeys).toEqual(['old-tab', 'new-tab'])
+  })
+
+  it('tracks realtime sequence numbers per pubkey in a merged name row', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 100, distance: 1_050, seq: 8 }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'b', name: 'ALICE', score: 120, distance: 1_200, seq: 1 }, 1010)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 90, distance: 900, seq: 7 }, 1020)
+
+    expect(lobby.players).toHaveLength(1)
+    expect(lobby.players[0]).toMatchObject({
+      score: 120,
+      distance: 1_200,
+      seqByPubkey: {
+        a: 8,
+        b: 1,
+      },
+    })
+  })
+
+  it('prunes stale pubkeys inside a merged name row without duplicating the player', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'old-tab', name: 'ALICE', score: 80 }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'new-tab', name: 'ALICE', score: 90 }, 2000)
+
+    const pruned = prunePlayers(lobby, 2600, 1000)
+
+    expect(pruned.players).toHaveLength(1)
+    expect(pruned.players[0]).toMatchObject({
+      name: 'ALICE',
+      pubkey: 'new-tab',
+      controlledBy: 1,
+    })
+    expect(pruned.players[0].pubkeys).toEqual(['new-tab'])
+  })
+
+  it('treats a same-name merged row as the local racer for active-racer checks', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 100, state: 'racing' }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'local', name: 'ALICE', score: 110, state: 'racing' }, 1010)
+
+    expect(activeRacers(lobby, { exceptPubkey: 'local' })).toEqual([])
+    expect(canStartRace(lobby, 'local')).toBe(true)
+  })
+
   it('allows the start button to launch a single-player race', () => {
     let lobby = createLobbyState()
     lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 0 }, 1000)
