@@ -40,7 +40,7 @@ describe('mobile layout css', () => {
     expect(app).toContain('visualViewport')
     expect(app).toContain('orientationchange')
     expect(app).toContain('scheduleResizeCanvas')
-    expect(app).toContain('Math.max(canvas.width / VIEW_WIDTH')
+    expect(app).toContain('calculateCanvasTransform')
     expect(css).toContain('.game-shell.race-fullscreen')
     expect(css).toContain('100dvh')
     expect(css).toContain('--game-vh')

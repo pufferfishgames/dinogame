@@ -23,6 +23,7 @@
     createRealtimeMesh,
     createRealtimeUpdate,
   } from './game/webrtc.js'
+  import { calculateCanvasTransform } from './game/canvasTransform.js'
   import { passphraseToPrivkey, privkeyToPubkey, randomPassphrase } from './nostr/identity.js'
   import {
     createScoreEvent,
@@ -542,26 +543,15 @@
   }
 
   function canvasTransform() {
-    if (!raceFullscreen) {
-      const scale = Math.min(canvas.width / VIEW_WIDTH, canvas.height / VIEW_HEIGHT)
-      return {
-        scale,
-        offsetX: (canvas.width - VIEW_WIDTH * scale) / 2,
-        offsetY: (canvas.height - VIEW_HEIGHT * scale) / 2,
-      }
-    }
-
-    const scale = Math.max(canvas.width / VIEW_WIDTH, canvas.height / VIEW_HEIGHT)
-    const minX = Math.min(0, canvas.width - VIEW_WIDTH * scale)
-    const minY = Math.min(0, canvas.height - VIEW_HEIGHT * scale)
-    const targetDinoX = canvas.width * 0.18
-    const targetGroundY = canvas.height * 0.82
-
-    return {
-      scale,
-      offsetX: clamp(targetDinoX - 96 * scale, minX, 0),
-      offsetY: clamp(targetGroundY - GROUND * scale, minY, 0),
-    }
+    return calculateCanvasTransform({
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+      viewWidth: VIEW_WIDTH,
+      viewHeight: VIEW_HEIGHT,
+      ground: GROUND,
+      fullscreen: raceFullscreen,
+      dinoX: 96,
+    })
   }
 
   function drawSky() {
@@ -1005,7 +995,7 @@
     ctx.fillStyle = accent
     ctx.fillRect(58, 24, 5, 3)
 
-    if (hat) drawBirthdayHat(45, 7, 1)
+    if (hat) drawBirthdayHat(45, -5, 1)
 
     ctx.restore()
   }
@@ -1087,10 +1077,6 @@
     ctx.textAlign = 'center'
     ctx.fillText(text, VIEW_WIDTH / 2, y)
     ctx.textAlign = 'left'
-  }
-
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value))
   }
 </script>
 
