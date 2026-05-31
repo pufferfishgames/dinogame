@@ -1,18 +1,18 @@
 import { normalizePlayerName } from './player.js'
 
 export const PLAYER_COLOR_PALETTE = [
-  { body: '#243f32', accent: '#d95f43' },
-  { body: '#315a86', accent: '#93d0c2' },
-  { body: '#7b3f8f', accent: '#f0c46b' },
-  { body: '#9a4d2f', accent: '#35a9b8' },
-  { body: '#2f7d6d', accent: '#f08c3a' },
-  { body: '#8b2f4f', accent: '#f8d77c' },
-  { body: '#4f6f2f', accent: '#d8436f' },
-  { body: '#2f4f9a', accent: '#e0b43c' },
-  { body: '#7a5a24', accent: '#70c3a2' },
-  { body: '#5b4a8f', accent: '#e26845' },
-  { body: '#2d6f9e', accent: '#f6d6a5' },
-  { body: '#8a3d3d', accent: '#9ad2df' },
+  { body: '#c03028', accent: '#28c8a0' },  // crimson + seafoam
+  { body: '#c85518', accent: '#2898e0' },  // burnt orange + sky blue
+  { body: '#b89000', accent: '#8040d0' },  // amber gold + purple
+  { body: '#5c9810', accent: '#d040c0' },  // lime green + fuchsia
+  { body: '#1a8c42', accent: '#e07020' },  // forest green + tangerine
+  { body: '#108888', accent: '#e8d010' },  // teal + vivid yellow
+  { body: '#1470c8', accent: '#f0a810' },  // azure blue + amber
+  { body: '#4828b0', accent: '#40d870' },  // indigo + lime
+  { body: '#7820a8', accent: '#30d8c8' },  // violet + turquoise
+  { body: '#b81478', accent: '#28d0e0' },  // magenta + cyan
+  { body: '#c02050', accent: '#28d890' },  // rose red + emerald
+  { body: '#1a40c8', accent: '#e05828' },  // cobalt blue + coral
 ]
 
 export function playerColorForName(name) {
