@@ -15,19 +15,19 @@
   import { normalizeEditablePlayerName, normalizePlayerName } from './game/player.js'
   import { getOrCreateSessionPassphrase } from './game/joining.js'
   import { buildRemotePlayerSprites } from './game/remotePlayers.js'
-  import { createRunnerState, jump, stepRunner } from './game/runner.js'
+  import { ROUND_DURATION_SECONDS, createRunnerState, jump, stepRunner } from './game/runner.js'
   import { passphraseToPrivkey, privkeyToPubkey, randomPassphrase } from './nostr/identity.js'
   import {
     createScoreEvent,
     createSessionEvent,
-    getBestScores,
+    getTotalScores,
     parseSessionEvent,
     signEvent,
   } from './nostr/events.js'
-  import { DEFAULT_RELAYS, fetchBestScores, openSessionRelays, publishEvent } from './nostr/relay.js'
+  import { DEFAULT_RELAYS, fetchTotalScores, openSessionRelays, publishEvent } from './nostr/relay.js'
 
   const NAME_KEY = 'dinogame.name.v1'
-  const BEST_KEY = 'dinogame.best.v2'
+  const TOTAL_KEY = 'dinogame.total.v1'
   const VIEW_WIDTH = 920
   const VIEW_HEIGHT = 360
   const GROUND = 285
@@ -37,11 +37,11 @@
   let frame = 0
   let lastFrame = 0
   let joined = false
-  let playerName = 'DINO'
+  let playerName = ''
   let privkey = ''
   let pubkey = ''
-  let localBest = 0
-  let highScores = []
+  let localTotal = 0
+  let totalScores = []
   let scoreStatus = 'loading'
   let relayStatus = 'offline'
   let lobby = createLobbyState()
@@ -60,7 +60,7 @@
   $: raceControl = raceStartControl(lobby, pubkey, { joined, runnerAlive: !runner.finished })
   $: canRequestRaceStart = raceControl.canStart
   $: raceButtonLabel = raceControl.label
-  $: secondsLeft = Math.max(0, Math.ceil(30 - (runner.elapsed ?? 0)))
+  $: secondsLeft = Math.max(0, Math.ceil(ROUND_DURATION_SECONDS - (runner.elapsed ?? 0)))
   $: remotePlayerSprites = buildRemotePlayerSprites({
     players: competitors,
     localPubkey: pubkey,
@@ -76,8 +76,8 @@
 
   onMount(() => {
     restoreIdentity()
-    playerName = normalizePlayerName(readStoredValue(NAME_KEY) || playerName)
-    localBest = Number(readStoredValue(BEST_KEY) || 0)
+    playerName = restorePlayerName()
+    localTotal = readStoredNumber(TOTAL_KEY)
     ctx = canvas.getContext('2d')
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
@@ -108,17 +108,18 @@
   async function refreshScores() {
     scoreStatus = 'loading'
     try {
-      highScores = await fetchBestScores(DEFAULT_RELAYS, 10)
-      scoreStatus = highScores.length ? 'ready' : 'empty'
+      totalScores = await fetchTotalScores(DEFAULT_RELAYS, 10)
+      scoreStatus = totalScores.length ? 'ready' : 'empty'
     } catch {
-      highScores = []
+      totalScores = []
       scoreStatus = 'offline'
     }
   }
 
   function joinLobby() {
-    playerName = normalizePlayerName(playerName)
-    writeStoredValue(NAME_KEY, playerName)
+    const editableName = normalizeEditablePlayerName(playerName)
+    playerName = normalizePlayerName(editableName)
+    if (editableName) writeStoredValue(NAME_KEY, editableName)
     joined = true
     lobby = recordPlayerUpdate(lobby, localPresence('lobby'), Date.now())
     connectSession()
@@ -280,18 +281,17 @@
     const award = awardRacePoints(lobby.players).find((entry) => entry.pubkey === pubkey)
     const points = award?.points ?? 100
 
-    if (points > localBest) {
-      localBest = points
-      writeStoredValue(BEST_KEY, String(points))
-      const event = signEvent(createScoreEvent(pubkey, { name: playerName, score: points, raceId: lobby.race.id }), privkey)
-      scoreEvents = [...scoreEvents, event]
-      highScores = getBestScores([...scoreEvents, event, ...highScores.map(scoreToEvent)], 10)
-      try {
-        await publishEvent(DEFAULT_RELAYS, event)
-        refreshScores()
-      } catch {
-        scoreStatus = 'offline'
-      }
+    localTotal += points
+    writeStoredValue(TOTAL_KEY, String(localTotal))
+
+    const event = signEvent(createScoreEvent(pubkey, { name: playerName, score: localTotal, raceId: lobby.race.id }), privkey)
+    scoreEvents = [...scoreEvents, event]
+    totalScores = getTotalScores([...scoreEvents, ...totalScores.map(scoreToEvent)], 10)
+    try {
+      await publishEvent(DEFAULT_RELAYS, event)
+      refreshScores()
+    } catch {
+      scoreStatus = 'offline'
     }
   }
 
@@ -313,6 +313,16 @@
     } catch {
       return ''
     }
+  }
+
+  function readStoredNumber(key) {
+    const value = Number(readStoredValue(key))
+    return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
+  }
+
+  function restorePlayerName() {
+    const storedName = normalizeEditablePlayerName(readStoredValue(NAME_KEY))
+    return storedName === 'DINO' ? '' : storedName
   }
 
   function writeStoredValue(key, value) {
@@ -385,19 +395,101 @@
   function drawObstacles() {
     for (const obstacle of runner.obstacles) {
       if (obstacle.x > VIEW_WIDTH || obstacle.x + obstacle.width < 0) continue
-      const y = GROUND - obstacle.height
-      if (obstacle.type.includes('cactus')) {
-        ctx.fillStyle = '#2f6b4f'
-        ctx.fillRect(obstacle.x, y, obstacle.width, obstacle.height)
-        ctx.fillStyle = '#234d3a'
-        ctx.fillRect(obstacle.x + obstacle.width * 0.58, y + 10, 8, 18)
-      } else {
-        ctx.fillStyle = '#7a6661'
-        ctx.beginPath()
-        ctx.roundRect(obstacle.x, y + 4, obstacle.width, obstacle.height - 4, 6)
-        ctx.fill()
+      switch (obstacle.type) {
+        case 'turtle':
+          drawTurtle(obstacle)
+          break
+        case 'mushroom':
+          drawMushroom(obstacle)
+          break
+        case 'puddle':
+          drawPuddle(obstacle)
+          break
+        default:
+          drawCactus(obstacle)
       }
     }
+  }
+
+  function drawCactus(obstacle) {
+    const x = obstacle.x
+    const y = GROUND - obstacle.height
+    const variant = obstacle.variant ?? 0
+    const greens = ['#2f8a55', '#3a9b5f', '#26744d', '#4aa35f']
+
+    ctx.fillStyle = greens[variant % greens.length]
+    ctx.beginPath()
+    ctx.roundRect(x + 9, y, 13, obstacle.height, 6)
+    ctx.roundRect(x, y + 18, 11, 19, 5)
+    ctx.roundRect(x + 20, y + 12, 10, 23, 5)
+    ctx.fill()
+    ctx.fillStyle = '#f8d77c'
+    ctx.fillRect(x + 14, y + 8, 2, 5)
+    ctx.fillRect(x + 6, y + 24, 2, 4)
+    ctx.fillRect(x + 24, y + 18, 2, 4)
+  }
+
+  function drawTurtle(obstacle) {
+    const x = obstacle.x
+    const y = GROUND - obstacle.height
+    const shellColors = ['#2f8a55', '#2f6b9a', '#7aa342', '#a35b35']
+    const shell = shellColors[(obstacle.variant ?? 0) % shellColors.length]
+
+    ctx.fillStyle = '#c98c35'
+    ctx.beginPath()
+    ctx.ellipse(x + 45, y + 17, 9, 7, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = shell
+    ctx.beginPath()
+    ctx.ellipse(x + 24, y + 14, 23, 14, 0, Math.PI, Math.PI * 2)
+    ctx.lineTo(x + 47, y + 22)
+    ctx.lineTo(x + 1, y + 22)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#f8d77c'
+    ctx.fillRect(x + 13, y + 13, 4, 9)
+    ctx.fillRect(x + 29, y + 13, 4, 9)
+    ctx.fillStyle = '#102018'
+    ctx.fillRect(x + 48, y + 13, 3, 3)
+  }
+
+  function drawMushroom(obstacle) {
+    const x = obstacle.x
+    const y = GROUND - obstacle.height
+    const capColors = ['#d95f43', '#d8436f', '#e0b43c', '#c14d38']
+    const cap = capColors[(obstacle.variant ?? 0) % capColors.length]
+
+    ctx.fillStyle = '#f6d6a5'
+    ctx.beginPath()
+    ctx.roundRect(x + 13, y + 17, 12, 21, 5)
+    ctx.fill()
+    ctx.fillStyle = cap
+    ctx.beginPath()
+    ctx.ellipse(x + 19, y + 17, 20, 15, 0, Math.PI, Math.PI * 2)
+    ctx.lineTo(x + 38, y + 18)
+    ctx.lineTo(x, y + 18)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#fffaf0'
+    ctx.beginPath()
+    ctx.ellipse(x + 10, y + 12, 4, 3, 0, 0, Math.PI * 2)
+    ctx.ellipse(x + 22, y + 8, 5, 4, 0, 0, Math.PI * 2)
+    ctx.ellipse(x + 31, y + 14, 4, 3, 0, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  function drawPuddle(obstacle) {
+    const x = obstacle.x
+    const y = GROUND - obstacle.height
+    const blues = ['#2f8fc6', '#35a9b8', '#4b83d1', '#2f6b9a']
+    ctx.fillStyle = blues[(obstacle.variant ?? 0) % blues.length]
+    ctx.beginPath()
+    ctx.ellipse(x + obstacle.width / 2, y + obstacle.height / 2 + 2, obstacle.width / 2, obstacle.height / 2, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = 'rgba(255, 250, 240, 0.72)'
+    ctx.beginPath()
+    ctx.ellipse(x + obstacle.width * 0.36, y + 5, 13, 3, -0.16, 0, Math.PI * 2)
+    ctx.fill()
   }
 
   function drawRemotePlayers() {
@@ -469,7 +561,7 @@
     ctx.fillText(`${String(secondsLeft).padStart(2, '0')}s`, 22, 38)
 
     if (!joined) {
-      drawCenteredLabel('NIKOLAI', 170, 38)
+      return
     } else if (waitingForPlayers) {
       drawCenteredLabel('WAITING', 172, 34)
     } else if (countdown > 0) {
@@ -532,9 +624,9 @@
         </button>
       {/if}
 
-      <div class="best-box">
-        <span>Best</span>
-        <strong>{localBest}</strong>
+      <div class="total-box">
+        <span>Total</span>
+        <strong>{localTotal}</strong>
       </div>
     </div>
   </section>
@@ -562,11 +654,11 @@
 
     <section class="panel-block">
       <div class="panel-header">
-        <h2>High Scores</h2>
+        <h2>Total Scores</h2>
         <button class="small-action" on:click={refreshScores}>Refresh</button>
       </div>
       <ol class="score-list">
-        {#each highScores as score}
+        {#each totalScores as score}
           <li>
             <span>{score.name}</span>
             <strong>{score.score}</strong>

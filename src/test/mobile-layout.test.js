@@ -21,4 +21,8 @@ describe('mobile layout css', () => {
   it('does not force a viewport-height game row on mobile', () => {
     expect(css).not.toContain('minmax(260px, 54vh)')
   })
+
+  it('keeps the total label readable on the green score box', () => {
+    expect(cssBlock('.total-box span')).toContain('color: #f8f3e7')
+  })
 })

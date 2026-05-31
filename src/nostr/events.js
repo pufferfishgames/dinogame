@@ -4,7 +4,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { normalizePlayerName } from '../game/player.js'
 
 export const SCORE_KIND = 30078
-export const SCORE_D_TAG = 'pufferfishgames/dinogame/highscore/v2'
+export const SCORE_D_TAG = 'pufferfishgames/dinogame/total/v1'
 export const SESSION_KIND = 20000
 export const SESSION_D_TAG = 'pufferfishgames/dinogame/session/v1'
 
@@ -79,19 +79,19 @@ export function parseSessionEvent(event) {
   }
 }
 
-export function getBestScores(events, limit = 10) {
-  const bestByPubkey = new Map()
+export function getTotalScores(events, limit = 10) {
+  const latestByPubkey = new Map()
 
   for (const event of events) {
     const score = parseScoreEvent(event)
     if (!score) continue
-    const current = bestByPubkey.get(score.pubkey)
-    if (!current || score.score > current.score || (score.score === current.score && score.createdAt > current.createdAt)) {
-      bestByPubkey.set(score.pubkey, score)
+    const current = latestByPubkey.get(score.pubkey)
+    if (!current || score.createdAt >= current.createdAt) {
+      latestByPubkey.set(score.pubkey, score)
     }
   }
 
-  return [...bestByPubkey.values()]
+  return [...latestByPubkey.values()]
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
       return b.createdAt - a.createdAt

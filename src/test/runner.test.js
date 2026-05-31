@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DINO_X,
   INITIAL_SPEED,
+  OBSTACLE_TYPES,
   ROUND_DURATION_SECONDS,
   createRunnerState,
   getRunnerSnapshot,
@@ -16,6 +17,18 @@ describe('runner simulation', () => {
     const second = createRunnerState({ seed: 42 })
 
     expect(first.obstacles.slice(0, 4)).toEqual(second.obstacles.slice(0, 4))
+  })
+
+  it('randomizes the colorful obstacle set from the race seed', () => {
+    const seenTypes = new Set()
+
+    for (const seed of [1, 2, 3, 4, 5, 42, 99]) {
+      for (const obstacle of createRunnerState({ seed }).obstacles) {
+        seenTypes.add(obstacle.type)
+      }
+    }
+
+    expect([...seenTypes].sort()).toEqual(OBSTACLE_TYPES.map((obstacle) => obstacle.type).sort())
   })
 
   it('advances score and speed while alive', () => {
@@ -57,7 +70,7 @@ describe('runner simulation', () => {
     expect(next.crashCooldown).toBeGreaterThan(0)
   })
 
-  it('runs for exactly 30 seconds and then freezes progress', () => {
+  it('runs for exactly 60 seconds and then freezes progress', () => {
     let state = createRunnerState({ seed: 1 })
 
     for (let i = 0; i < (ROUND_DURATION_SECONDS + 1) * 60; i += 1) {
@@ -73,12 +86,12 @@ describe('runner simulation', () => {
   })
 
   it.each([1, 7, 42, 99, 12345])(
-    'gives a novice jump strategy enough room to stay engaged for 30 seconds with seed %s',
+    'gives a novice jump strategy enough room to stay engaged for 60 seconds with seed %s',
     (seed) => {
       let state = createRunnerState({ seed })
       let elapsed = 0
 
-      for (let i = 0; i < 30 * 60 && !state.finished; i += 1) {
+      for (let i = 0; i < ROUND_DURATION_SECONDS * 60 && !state.finished; i += 1) {
         const nextObstacle = state.obstacles.find((obstacle) => obstacle.x + obstacle.width > DINO_X)
         if (nextObstacle && nextObstacle.x - DINO_X < 132 && state.dino.y === 0) {
           state = jump(state)
@@ -87,10 +100,10 @@ describe('runner simulation', () => {
         elapsed += 1 / 60
       }
 
-      expect(elapsed).toBeGreaterThan(29.9)
+      expect(elapsed).toBeGreaterThan(59.9)
       expect(state.alive).toBe(true)
       expect(state.finished).toBe(true)
-      expect(state.speed).toBeLessThan(400)
+      expect(state.speed).toBeLessThan(560)
     },
   )
 })

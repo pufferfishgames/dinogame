@@ -152,11 +152,17 @@ h2 {
   min-width: 0;
 }
 
-.name-field span,
-.best-box span {
+.name-field span {
   font-size: 0.72rem;
   font-weight: 900;
   color: #476256;
+  text-transform: uppercase;
+}
+
+.total-box span {
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #f8f3e7;
   text-transform: uppercase;
 }
 
@@ -195,7 +201,7 @@ h2 {
   font-size: 0.78rem;
 }
 
-.best-box {
+.total-box {
   display: grid;
   align-content: center;
   min-height: 44px;
@@ -205,7 +211,7 @@ h2 {
   color: #fffaf0;
 }
 
-.best-box strong {
+.total-box strong {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 1.2rem;
 }
@@ -303,7 +309,7 @@ h2 {
     grid-template-columns: 1fr 96px;
   }
 
-  .best-box {
+  .total-box {
     grid-column: 1 / -1;
   }
 

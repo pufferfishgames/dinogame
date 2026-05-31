@@ -1,9 +1,9 @@
 export const DINO_X = 96
 export const GROUND_Y = 0
 export const INITIAL_SPEED = 240
-export const SPEED_ACCELERATION = 4
+export const SPEED_ACCELERATION = 5
 export const FIRST_OBSTACLE_X = 980
-export const ROUND_DURATION_SECONDS = 30
+export const ROUND_DURATION_SECONDS = 60
 export const CRASH_SLOWDOWN_FACTOR = 0.68
 export const CRASH_COOLDOWN_SECONDS = 0.75
 
@@ -11,15 +11,15 @@ const GRAVITY = 2200
 const JUMP_VELOCITY = -820
 const DINO_WIDTH = 44
 const DINO_HEIGHT = 48
-const MIN_OBSTACLE_GAP = 460
-const MAX_OBSTACLE_GAP = 760
+const MIN_OBSTACLE_GAP = 390
+const MAX_OBSTACLE_GAP = 690
 const TRACK_WIDTH = 920
 
-const OBSTACLE_TYPES = [
-  { type: 'cactus', width: 28, height: 44 },
-  { type: 'double-cactus', width: 46, height: 36 },
-  { type: 'rock', width: 34, height: 24 },
-  { type: 'tall-cactus', width: 32, height: 58 },
+export const OBSTACLE_TYPES = [
+  { type: 'cactus', width: 30, height: 50 },
+  { type: 'turtle', width: 52, height: 28 },
+  { type: 'mushroom', width: 38, height: 38 },
+  { type: 'puddle', width: 64, height: 14 },
 ]
 
 export function createRunnerState({ seed = 1 } = {}) {
@@ -171,6 +171,8 @@ function generateObstacle(seed, x) {
   let random = nextRandom(seed)
   const type = OBSTACLE_TYPES[Math.floor(random.value * OBSTACLE_TYPES.length)]
   random = nextRandom(random.seed)
+  const variant = Math.floor(random.value * 4)
+  random = nextRandom(random.seed)
   const gap = MIN_OBSTACLE_GAP + random.value * (MAX_OBSTACLE_GAP - MIN_OBSTACLE_GAP)
 
   return {
@@ -178,6 +180,7 @@ function generateObstacle(seed, x) {
     nextX: x + type.width + gap,
     obstacle: {
       ...type,
+      variant,
       x,
     },
   }

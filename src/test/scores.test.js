@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createScoreEvent,
   createSessionEvent,
-  getBestScores,
+  getTotalScores,
   parseScoreEvent,
   parseSessionEvent,
   signEvent,
@@ -18,21 +18,27 @@ describe('Nostr score events', () => {
     expect(event.id).toHaveLength(64)
     expect(event.sig).toHaveLength(128)
     expect(event.kind).toBe(30078)
-    expect(event.tags).toContainEqual(['d', 'pufferfishgames/dinogame/highscore/v2'])
+    expect(event.tags).toContainEqual(['d', 'pufferfishgames/dinogame/total/v1'])
   })
 
-  it('parses and sorts the best score per public key', () => {
+  it('parses and sorts the latest cumulative total per public key', () => {
     const events = [
       createScoreEvent('a', { name: 'ALICE', score: 300 }, { now: 10 }),
       createScoreEvent('b', { name: 'BOB', score: 500 }, { now: 11 }),
-      createScoreEvent('a', { name: 'ALICE', score: 700 }, { now: 12 }),
+      createScoreEvent('a', { name: 'ALICE', score: 150 }, { now: 12 }),
     ]
 
     expect(parseScoreEvent(events[0])).toMatchObject({ name: 'ALICE', score: 300 })
-    expect(getBestScores(events).map((score) => [score.name, score.score])).toEqual([
-      ['ALICE', 700],
+    expect(getTotalScores(events).map((score) => [score.name, score.score])).toEqual([
       ['BOB', 500],
+      ['ALICE', 150],
     ])
+  })
+
+  it('records blank score names with the playable fallback name', () => {
+    const event = createScoreEvent('a', { name: '', score: 100 }, { now: 10 })
+
+    expect(parseScoreEvent(event)).toMatchObject({ name: 'GUEST', score: 100 })
   })
 
   it('records jump motion in session events so remote players can animate', () => {

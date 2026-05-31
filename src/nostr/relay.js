@@ -3,7 +3,7 @@ import {
   SCORE_KIND,
   SESSION_D_TAG,
   SESSION_KIND,
-  getBestScores,
+  getTotalScores,
   parseScoreEvent,
 } from './events.js'
 
@@ -89,16 +89,16 @@ function publishEventToRelay(relayUrl, event) {
   })
 }
 
-export async function fetchBestScores(relayUrls, limit = 10) {
+export async function fetchTotalScores(relayUrls, limit = 10) {
   const urls = normalizeRelayUrls(relayUrls)
   if (!urls.length) return []
 
-  const results = await Promise.allSettled(urls.map((url) => fetchBestScoresFromRelay(url)))
+  const results = await Promise.allSettled(urls.map((url) => fetchTotalScoresFromRelay(url)))
   const events = results.flatMap((result) => result.status === 'fulfilled' ? result.value : [])
-  return getBestScores(events, limit)
+  return getTotalScores(events, limit)
 }
 
-function fetchBestScoresFromRelay(relayUrl) {
+function fetchTotalScoresFromRelay(relayUrl) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(relayUrl)
     const events = []
