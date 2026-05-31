@@ -39,4 +39,22 @@ describe('runner simulation', () => {
 
     expect(isColliding(getRunnerSnapshot(createRunnerState()), obstacle)).toBe(true)
   })
+
+  it('gives a novice jump strategy enough room to stay engaged for 30 seconds', () => {
+    let state = createRunnerState({ seed: 7 })
+    let elapsed = 0
+
+    for (let i = 0; i < 30 * 60 && state.alive; i += 1) {
+      const nextObstacle = state.obstacles.find((obstacle) => obstacle.x + obstacle.width > DINO_X)
+      if (nextObstacle && nextObstacle.x - DINO_X < 132 && state.dino.y === 0) {
+        state = jump(state)
+      }
+      state = stepRunner(state, 1 / 60)
+      elapsed += 1 / 60
+    }
+
+    expect(elapsed).toBeGreaterThanOrEqual(30)
+    expect(state.alive).toBe(true)
+    expect(state.speed).toBeLessThan(400)
+  })
 })
