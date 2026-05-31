@@ -3,6 +3,7 @@
   import {
     applyRace,
     awardRacePoints,
+    canFinalizeRace,
     createLobbyState,
     prunePlayers,
     raceStartControl,
@@ -26,7 +27,7 @@
   import { DEFAULT_RELAYS, fetchBestScores, openSessionRelays, publishEvent } from './nostr/relay.js'
 
   const NAME_KEY = 'dinogame.name.v1'
-  const BEST_KEY = 'dinogame.best.v1'
+  const BEST_KEY = 'dinogame.best.v2'
   const VIEW_WIDTH = 920
   const VIEW_HEIGHT = 360
   const GROUND = 285
@@ -50,6 +51,7 @@
   let pruneTimer = 0
   let latestSubmittedRace = ''
   let lastMotionPublish = 0
+  let localFinishedAt = 0
   let scoreEvents = []
 
   $: competitors = lobby.players
@@ -189,6 +191,7 @@
     runner = createRunnerState({ seed: race.seed })
     latestSubmittedRace = ''
     lastMotionPublish = 0
+    localFinishedAt = 0
     lastFrame = performance.now()
     publishPresence('countdown')
   }
@@ -253,13 +256,22 @@
         publishPresence('racing')
       }
       if (next.finished) {
+        localFinishedAt = Date.now()
         publishPresence('finished')
-        submitRacePoints()
       }
+    }
+
+    if (joined && lobby.phase === 'racing' && runner.finished) {
+      maybeSubmitRacePoints()
     }
 
     draw()
     frame = requestAnimationFrame(tick)
+  }
+
+  function maybeSubmitRacePoints() {
+    if (!canFinalizeRace(lobby, pubkey, localFinishedAt, Date.now())) return
+    submitRacePoints()
   }
 
   async function submitRacePoints() {

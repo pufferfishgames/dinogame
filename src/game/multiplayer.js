@@ -4,6 +4,7 @@ export const PLAYER_TTL_MS = 10_750
 export const COUNTDOWN_MS = 3_000
 export const START_EVENT_GRACE_MS = 10_000
 export const PLACEMENT_POINTS = [100, 50, 10]
+export const FINALIZE_GRACE_MS = 2_500
 
 export function createLobbyState() {
   return {
@@ -28,6 +29,18 @@ export function awardRacePoints(players) {
     place: index + 1,
     points: PLACEMENT_POINTS[index] ?? 1,
   }))
+}
+
+export function canFinalizeRace(
+  lobby,
+  localPubkey,
+  localFinishedAt,
+  now = Date.now(),
+  graceMs = FINALIZE_GRACE_MS,
+) {
+  if (!localFinishedAt) return false
+  if (activeRacers(lobby, { exceptPubkey: localPubkey }).length === 0) return true
+  return now - localFinishedAt >= graceMs
 }
 
 export function recordPlayerUpdate(lobby, update, now = Date.now()) {

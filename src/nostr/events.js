@@ -4,7 +4,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { normalizePlayerName } from '../game/player.js'
 
 export const SCORE_KIND = 30078
-export const SCORE_D_TAG = 'pufferfishgames/dinogame/highscore'
+export const SCORE_D_TAG = 'pufferfishgames/dinogame/highscore/v2'
 export const SESSION_KIND = 20000
 export const SESSION_D_TAG = 'pufferfishgames/dinogame/session/v1'
 

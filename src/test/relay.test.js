@@ -14,7 +14,7 @@ describe('relay message helpers', () => {
     expect(JSON.parse(buildScoreSubscribeMessage('scores'))).toEqual([
       'REQ',
       'scores',
-      { kinds: [30078], '#d': ['pufferfishgames/dinogame/highscore'] },
+      { kinds: [30078], '#d': ['pufferfishgames/dinogame/highscore/v2'] },
     ])
     expect(JSON.parse(buildSessionSubscribeMessage('room'))[2]).toMatchObject({ kinds: [20000] })
   })

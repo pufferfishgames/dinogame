@@ -18,7 +18,7 @@ describe('Nostr score events', () => {
     expect(event.id).toHaveLength(64)
     expect(event.sig).toHaveLength(128)
     expect(event.kind).toBe(30078)
-    expect(event.tags).toContainEqual(['d', 'pufferfishgames/dinogame/highscore'])
+    expect(event.tags).toContainEqual(['d', 'pufferfishgames/dinogame/highscore/v2'])
   })
 
   it('parses and sorts the best score per public key', () => {

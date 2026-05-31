@@ -4,6 +4,7 @@ import {
   canStartRace,
   createLobbyState,
   awardRacePoints,
+  canFinalizeRace,
   prunePlayers,
   raceStartControl,
   recordPlayerUpdate,
@@ -111,5 +112,24 @@ describe('multiplayer lobby', () => {
       ['DREW', 4, 1],
       ['ELI', 5, 1],
     ])
+  })
+
+  it('waits for other active racers before finalizing placement points', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 930, state: 'finished' }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'b', name: 'BOB', score: 1100, state: 'racing' }, 1000)
+    lobby = { ...lobby, phase: 'racing' }
+
+    expect(canFinalizeRace(lobby, 'a', 30_000, 31_000)).toBe(false)
+    expect(canFinalizeRace(lobby, 'a', 30_000, 33_000)).toBe(true)
+  })
+
+  it('finalizes immediately when all known competitors have finished', () => {
+    let lobby = createLobbyState()
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 930, state: 'finished' }, 1000)
+    lobby = recordPlayerUpdate(lobby, { pubkey: 'b', name: 'BOB', score: 1100, state: 'finished' }, 1000)
+    lobby = { ...lobby, phase: 'racing' }
+
+    expect(canFinalizeRace(lobby, 'a', 30_000, 30_100)).toBe(true)
   })
 })

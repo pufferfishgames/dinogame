@@ -100,11 +100,15 @@ export function stepRunner(state, dt) {
     obstacles = [...obstacles, generated.obstacle]
   }
 
+  let elapsed = Math.min(ROUND_DURATION_SECONDS, (state.elapsed ?? 0) + cappedDt)
+  const finished = elapsed >= ROUND_DURATION_SECONDS - 1e-6
+  if (finished) elapsed = ROUND_DURATION_SECONDS
+
   const next = {
     ...state,
     randomSeed,
     nextX,
-    elapsed: Math.min(ROUND_DURATION_SECONDS, (state.elapsed ?? 0) + cappedDt),
+    elapsed,
     distance,
     score,
     speed,
@@ -126,7 +130,7 @@ export function stepRunner(state, dt) {
     ...next,
     speed,
     alive: true,
-    finished: next.elapsed >= ROUND_DURATION_SECONDS,
+    finished,
     crashCooldown: collided ? CRASH_COOLDOWN_SECONDS : crashCooldown,
   }
 }
