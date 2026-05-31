@@ -32,4 +32,20 @@ describe('remote player sprites', () => {
     expect(sprites[0].x).toBeGreaterThan(sprites[1].x)
     expect(sprites[0].y).not.toBe(sprites[1].y)
   })
+
+  it('moves a remote player upward when their presence reports a jump', () => {
+    const [grounded] = buildRemotePlayerSprites({
+      players: [{ pubkey: 'b', name: 'BOB', score: 120, state: 'racing', jumpY: 0 }],
+      localPubkey: 'local',
+      localScore: 120,
+    })
+    const [jumping] = buildRemotePlayerSprites({
+      players: [{ pubkey: 'b', name: 'BOB', score: 120, state: 'racing', jumpY: -84 }],
+      localPubkey: 'local',
+      localScore: 120,
+    })
+
+    expect(jumping.y).toBeLessThan(grounded.y)
+    expect(jumping.jumpY).toBe(-84)
+  })
 })

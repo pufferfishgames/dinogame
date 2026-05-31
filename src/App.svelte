@@ -4,7 +4,9 @@
     applyRace,
     createLobbyState,
     prunePlayers,
+    raceStartControl,
     recordPlayerUpdate,
+    shouldApplyRaceStart,
     startRace,
   } from './game/multiplayer.js'
   import { connectionLabel, connectionTone } from './game/connectivity.js'
@@ -46,12 +48,15 @@
   let presenceTimer = 0
   let pruneTimer = 0
   let latestSubmittedRace = ''
+  let lastMotionPublish = 0
   let scoreEvents = []
 
   $: competitors = lobby.players
-  $: canStart = joined && lobby.phase !== 'countdown'
   $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
   $: currentScore = runner.score
+  $: raceControl = raceStartControl(lobby, pubkey, { joined, runnerAlive: runner.alive })
+  $: canRequestRaceStart = raceControl.canStart
+  $: raceButtonLabel = raceControl.label
   $: remotePlayerSprites = buildRemotePlayerSprites({
     players: competitors,
     localPubkey: pubkey,
@@ -161,12 +166,14 @@
         name: update.name,
         score: update.score,
         state: update.state,
+        jumpY: update.jumpY,
       },
       (update.createdAt || Math.floor(Date.now() / 1000)) * 1000,
     )
   }
 
   function beginRace() {
+    if (!canRequestRaceStart) return
     const result = startRace(lobby, pubkey, Date.now())
     if (!result.started) return
 
@@ -175,10 +182,11 @@
   }
 
   function applyIncomingRace(race) {
-    if (!race?.id || lobby.race?.id === race.id) return
+    if (!shouldApplyRaceStart(lobby, race, Date.now())) return
     lobby = applyRace(lobby, race, Date.now())
     runner = createRunnerState({ seed: race.seed })
     latestSubmittedRace = ''
+    lastMotionPublish = 0
     lastFrame = performance.now()
     publishPresence('countdown')
   }
@@ -196,6 +204,7 @@
         name: playerName,
         score: runner.score,
         state,
+        jumpY: runner.dino.y,
         race,
       }),
       privkey,
@@ -209,6 +218,7 @@
       name: playerName,
       score: runner.score,
       state,
+      jumpY: runner.dino.y,
     }
   }
 
@@ -236,6 +246,10 @@
     if (joined && lobby.phase === 'racing' && runner.alive) {
       const next = stepRunner(runner, dt)
       runner = next
+      if (now - lastMotionPublish >= 220) {
+        lastMotionPublish = now
+        publishPresence('racing')
+      }
       if (!next.alive) {
         publishPresence('crashed')
         submitScore(next.score)
@@ -463,8 +477,8 @@
   <section class="stage">
     <div class="title-row">
       <div>
-        <p class="eyebrow">Nostr relay racer</p>
-        <h1>Dino Relay</h1>
+        <p class="eyebrow">Multiplayer jump race</p>
+        <h1>Nikolai's dino race</h1>
       </div>
       <div class="status-strip" aria-label="Relay status">
         <span
@@ -496,8 +510,8 @@
       {#if !joined}
         <button class="primary-action" on:click={joinLobby}>Join</button>
       {:else}
-        <button class="primary-action" disabled={!canStart} on:click={beginRace}>
-          {lobby.phase === 'racing' ? 'Next' : 'Start'}
+        <button class="primary-action" disabled={!canRequestRaceStart} on:click={beginRace}>
+          {raceButtonLabel}
         </button>
       {/if}
 

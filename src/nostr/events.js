@@ -39,6 +39,7 @@ export function createSessionEvent(pubkey, payload, { now = Math.floor(Date.now(
       name: normalizePlayerName(payload.name),
       score: Math.max(0, Math.floor(Number(payload.score) || 0)),
       state: payload.state ?? 'lobby',
+      jumpY: clampJumpY(payload.jumpY),
       race: payload.race ?? null,
     }),
   }
@@ -72,6 +73,7 @@ export function parseSessionEvent(event) {
     name: normalizePlayerName(payload.name),
     score: Math.max(0, Math.floor(Number(payload.score) || 0)),
     state: payload.state ?? 'lobby',
+    jumpY: clampJumpY(payload.jumpY),
     race: payload.race ?? null,
     createdAt: event.created_at ?? 0,
   }
@@ -133,4 +135,9 @@ function findTag(event, key) {
 
 function hasTag(event, key, value) {
   return event.tags?.some((tag) => tag[0] === key && tag[1] === value)
+}
+
+function clampJumpY(value) {
+  const y = Math.round(Number(value) || 0)
+  return Math.max(-180, Math.min(0, y))
 }

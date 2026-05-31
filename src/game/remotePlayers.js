@@ -19,6 +19,7 @@ export function buildRemotePlayerSprites({
       const progressDelta = score - Math.max(0, Math.floor(Number(localScore) || 0))
       const laneOffset = LANE_OFFSETS[index % LANE_OFFSETS.length]
       const stagger = (index % 3) * 18
+      const jumpY = clampJumpY(player.jumpY)
 
       return {
         pubkey: player.pubkey,
@@ -26,7 +27,8 @@ export function buildRemotePlayerSprites({
         score,
         state: player.state ?? 'lobby',
         x: clamp(DINO_X + 78 + progressDelta * 1.35 + stagger, 24, trackWidth - REMOTE_DINO_WIDTH - 20),
-        y: BASE_Y + laneOffset,
+        y: BASE_Y + laneOffset + jumpY,
+        jumpY,
         width: REMOTE_DINO_WIDTH,
         height: 42,
       }
@@ -39,4 +41,9 @@ export function buildRemotePlayerSprites({
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
+}
+
+function clampJumpY(value) {
+  const y = Math.round(Number(value) || 0)
+  return Math.max(-180, Math.min(0, y))
 }
