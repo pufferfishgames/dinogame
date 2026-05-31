@@ -5,6 +5,7 @@
     awardRacePoints,
     canFinalizeRace,
     createLobbyState,
+    mergeNostrUpdate,
     prunePlayers,
     raceStartControl,
     recordPlayerUpdate,
@@ -187,15 +188,11 @@
       applyIncomingRace(update.race)
     }
 
+    const existing = lobby.players.find((p) => p.pubkey === update.pubkey)
+    const isPeerConnected = realtime?.isPeerConnected(update.pubkey) ?? false
     lobby = recordPlayerUpdate(
       lobby,
-      {
-        pubkey: update.pubkey,
-        name: update.name,
-        score: update.score,
-        state: update.state,
-        jumpY: update.jumpY,
-      },
+      mergeNostrUpdate(existing, update, { isPeerConnected }),
       (update.createdAt || Math.floor(Date.now() / 1000)) * 1000,
     )
     realtime?.updatePlayers(lobby.players)

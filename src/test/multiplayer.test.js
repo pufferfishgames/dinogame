@@ -5,6 +5,7 @@ import {
   createLobbyState,
   awardRacePoints,
   canFinalizeRace,
+  mergeNostrUpdate,
   prunePlayers,
   raceStartControl,
   recordPlayerUpdate,
@@ -13,6 +14,23 @@ import {
 } from '../game/multiplayer.js'
 
 describe('multiplayer lobby', () => {
+  it('preserves WebRTC position state when a stale Nostr update arrives for a connected peer', () => {
+    const existing = { state: 'racing', jumpY: -80 }
+    const nostrUpdate = { pubkey: 'a', name: 'ALICE', score: 100, state: 'lobby', jumpY: 0 }
+    const merged = mergeNostrUpdate(existing, nostrUpdate, { isPeerConnected: true })
+    expect(merged.state).toBe('racing')
+    expect(merged.jumpY).toBe(-80)
+    expect(merged.name).toBe('ALICE')
+    expect(merged.score).toBe(100)
+  })
+
+  it('applies Nostr update when no WebRTC peer is connected', () => {
+    const nostrUpdate = { pubkey: 'a', name: 'ALICE', score: 100, state: 'lobby', jumpY: 0 }
+    const merged = mergeNostrUpdate(null, nostrUpdate, { isPeerConnected: false })
+    expect(merged.state).toBe('lobby')
+    expect(merged.jumpY).toBe(0)
+  })
+
   it('allows the start button to launch a single-player race', () => {
     let lobby = createLobbyState()
     lobby = recordPlayerUpdate(lobby, { pubkey: 'a', name: 'ALICE', score: 0 }, 1000)

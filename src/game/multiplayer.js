@@ -6,6 +6,16 @@ export const START_EVENT_GRACE_MS = 10_000
 export const PLACEMENT_POINTS = [100, 50, 10]
 export const FINALIZE_GRACE_MS = 2_500
 
+export function mergeNostrUpdate(existing, update, { isPeerConnected = false } = {}) {
+  return {
+    pubkey: update.pubkey,
+    name: update.name,
+    score: update.score,
+    state: isPeerConnected && existing ? existing.state : update.state,
+    jumpY: isPeerConnected && existing ? existing.jumpY : update.jumpY,
+  }
+}
+
 export function createLobbyState() {
   return {
     phase: 'idle',

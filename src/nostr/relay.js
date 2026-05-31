@@ -10,10 +10,10 @@ import {
 } from './events.js'
 
 export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
   'wss://nos.lol',
   'wss://relay.primal.net',
-  'wss://relay.nostr.band',
+  'wss://nostr.wine',
+  'wss://relay.snort.social',
 ]
 
 export function normalizeRelayUrls(relayUrls = DEFAULT_RELAYS) {

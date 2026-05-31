@@ -51,6 +51,20 @@ describe('runner simulation', () => {
     expect(obstacleComplexityForX(24_000)).toBeGreaterThan(0.9)
   })
 
+  it('reaches peak complexity well before the 20k distance mark', () => {
+    expect(obstacleComplexityForX(15_000)).toBeGreaterThan(0.9)
+  })
+
+  it('applies a steep speed cut when the dinosaur hits an obstacle', () => {
+    const state = {
+      ...createRunnerState({ seed: 1 }),
+      speed: 320,
+      obstacles: [{ x: DINO_X + 8, width: 28, height: 44, type: 'cactus' }],
+    }
+    const next = stepRunner(state, 1 / 60)
+    expect(next.speed).toBeLessThan(320 * 0.62)
+  })
+
   it('generates more varied spacing than a fixed cactus cadence', () => {
     const state = createRunnerState({ seed: 42 })
     const gaps = state.obstacles.slice(1, 10).map((obstacle, index) => {

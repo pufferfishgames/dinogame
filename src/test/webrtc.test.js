@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   REALTIME_CHANNEL,
+  REALTIME_SEND_INTERVAL_MS,
   createRealtimeMesh,
   createRealtimeUpdate,
   parseRealtimeMessage,
@@ -9,6 +10,10 @@ import {
 } from '../game/webrtc.js'
 
 describe('WebRTC realtime helpers', () => {
+  it('uses a low realtime send interval for sub-5ms latency', () => {
+    expect(REALTIME_SEND_INTERVAL_MS).toBeLessThanOrEqual(5)
+  })
+
   it('chooses one deterministic offerer for each peer pair', () => {
     expect(shouldOfferConnection('a', 'b')).toBe(true)
     expect(shouldOfferConnection('b', 'a')).toBe(false)
@@ -105,6 +110,29 @@ describe('WebRTC realtime helpers', () => {
       to: 'b',
       candidate: { candidate: 'candidate-1' },
     })
+  })
+
+  it('reports whether a data channel to a peer is open', () => {
+    class FakePeerConnection {
+      constructor() {}
+      close() {}
+    }
+
+    const mesh = createRealtimeMesh({
+      localPubkey: 'b',
+      publishSignal() {},
+      RTCPeerConnectionImpl: FakePeerConnection,
+    })
+
+    mesh.updatePlayers([{ pubkey: 'a' }, { pubkey: 'b' }])
+    expect(mesh.isPeerConnected('a')).toBe(false)
+    expect(mesh.isPeerConnected('unknown')).toBe(false)
+
+    const peer = [...mesh.peers.values()][0]
+    const channel = { readyState: 'open', close() {} }
+    peer.pc.ondatachannel({ channel })
+
+    expect(mesh.isPeerConnected('a')).toBe(true)
   })
 
   it('applies remote data channel messages to the owning peer pubkey', () => {

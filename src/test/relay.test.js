@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_RELAYS,
   buildPublishMessage,
   buildScoreSubscribeMessage,
   buildSessionSubscribeMessage,
@@ -35,6 +36,12 @@ describe('relay message helpers', () => {
       accepted: true,
       message: 'saved',
     })
+  })
+
+  it('avoids relay endpoints known to be unavailable', () => {
+    expect(DEFAULT_RELAYS).not.toContain('wss://relay.damus.io')
+    expect(DEFAULT_RELAYS).not.toContain('wss://relay.nostr.band')
+    expect(DEFAULT_RELAYS.length).toBeGreaterThanOrEqual(3)
   })
 
   it('normalizes relay lists to unique secure websocket urls', () => {

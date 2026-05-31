@@ -1,6 +1,6 @@
 import { normalizePlayerName } from './player.js'
 
-export const REALTIME_SEND_INTERVAL_MS = 80
+export const REALTIME_SEND_INTERVAL_MS = 1
 export const REALTIME_CHANNEL = 'dinogame-state-v1'
 
 const DEFAULT_ICE_SERVERS = [
@@ -142,6 +142,11 @@ class RealtimeMesh {
     }
   }
 
+  isPeerConnected(pubkey) {
+    const peer = this.peers.get(pubkey)
+    return peer?.channel?.readyState === 'open'
+  }
+
   broadcast(message) {
     const payload = serializeRealtimeMessage(message)
     let sent = 0
@@ -240,9 +245,8 @@ function createDisabledMesh() {
   return {
     updatePlayers() {},
     handleSignal() {},
-    broadcast() {
-      return 0
-    },
+    broadcast() { return 0 },
+    isPeerConnected() { return false },
     close() {},
   }
 }
