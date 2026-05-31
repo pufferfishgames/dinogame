@@ -21,7 +21,7 @@
   import { normalizeEditablePlayerName, normalizePlayerName } from './game/player.js'
   import { getOrCreateSessionPassphrase } from './game/joining.js'
   import { buildRemotePlayerSprites } from './game/remotePlayers.js'
-  import { ROUND_DURATION_SECONDS, createRunnerState, jump, stepRunner } from './game/runner.js'
+  import { ROUND_DURATION_SECONDS, createRunnerState, estimateFinishDistance, jump, stepRunner } from './game/runner.js'
   import {
     REALTIME_SEND_INTERVAL_MS,
     createRealtimeMesh,
@@ -559,6 +559,7 @@
     ctx.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
     drawSky()
     drawGround()
+    drawFinishLine()
     drawObstacles()
     drawRemotePlayers()
     drawDino()
@@ -742,6 +743,69 @@
     ctx.fillRect(0, GROUND + 10, VIEW_WIDTH, 2)
   }
 
+  function drawFinishLine() {
+    if (lobby.phase !== 'racing' && !runner.finished) return
+
+    const finishDistance = fastestProjectedFinishDistance()
+    const x = Math.round(96 + finishDistance - runner.distance)
+    if (x > VIEW_WIDTH + 180 || x < -120) return
+
+    const top = GROUND - 96
+    const bannerTop = top + 10
+    const bannerWidth = 68
+    const square = 8
+
+    ctx.save()
+    ctx.fillStyle = 'rgba(16, 32, 24, 0.22)'
+    ctx.fillRect(x - 10, GROUND + 11, bannerWidth + 20, 8)
+
+    ctx.fillStyle = '#f8f3e7'
+    ctx.fillRect(x, top, 6, GROUND - top + 10)
+    ctx.fillRect(x + bannerWidth, top, 6, GROUND - top + 10)
+    ctx.fillStyle = '#102018'
+    ctx.fillRect(x + 1, top, 2, GROUND - top + 10)
+    ctx.fillRect(x + bannerWidth + 1, top, 2, GROUND - top + 10)
+
+    for (let row = 0; row < 3; row += 1) {
+      for (let col = 0; col < 8; col += 1) {
+        ctx.fillStyle = (row + col) % 2 ? '#102018' : '#fffaf0'
+        ctx.fillRect(x + 6 + col * square, bannerTop + row * square, square, square)
+      }
+    }
+
+    ctx.fillStyle = '#d95f43'
+    ctx.fillRect(x + 6, bannerTop + 28, bannerWidth - 4, 5)
+    ctx.fillStyle = '#102018'
+    ctx.font = '800 10px ui-monospace, SFMono-Regular, Menlo, monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText('FINISH', x + bannerWidth / 2 + 3, bannerTop + 44)
+    ctx.textAlign = 'left'
+    ctx.restore()
+  }
+
+  function fastestProjectedFinishDistance() {
+    const estimates = [
+      estimateFinishDistance({
+        distance: runner.distance,
+        speed: runner.speed,
+        elapsed: runner.elapsed,
+      }),
+    ]
+
+    for (const player of competitors) {
+      if (isLocalPlayer(player)) continue
+      const speed = Number(player.speed) || Number(player.distanceVelocity) || 0
+      const elapsed = Number(player.elapsed) || runner.elapsed
+      estimates.push(estimateFinishDistance({
+        distance: player.distance,
+        speed,
+        elapsed,
+      }))
+    }
+
+    return Math.max(...estimates)
+  }
+
   function drawObstacles() {
     for (const obstacle of runner.obstacles) {
       if (obstacle.x > VIEW_WIDTH || obstacle.x + obstacle.width < 0) continue
@@ -763,6 +827,9 @@
           break
         case 'pine-tree':
           drawPineBarrier(obstacle)
+          break
+        case 'tunnel':
+          drawTunnel(obstacle)
           break
         default:
           drawCactus(obstacle)
@@ -932,6 +999,72 @@
     ctx.fillRect(center - 2, y + 13, 4, 4)
     ctx.fillRect(center + 10, y + 31, 4, 4)
     ctx.fillRect(center - 13, y + 42, 4, 4)
+  }
+
+  function drawTunnel(obstacle) {
+    const x = obstacle.x
+    const y = GROUND - obstacle.height
+    const variant = obstacle.variant ?? 0
+    const greens = ['#39a64b', '#2f9b57', '#45ad63', '#328c4e']
+    const green = greens[variant % greens.length]
+    const phase = (runner.elapsed ?? 0) * 5 + (obstacle.motionOffset ?? 0) * Math.PI * 2
+    const turtleWalk = Math.sin(phase) * 9
+    const topTurtleWalk = Math.cos(phase * 0.8) * 7
+
+    ctx.fillStyle = 'rgba(16, 32, 24, 0.18)'
+    ctx.beginPath()
+    ctx.ellipse(x + obstacle.width / 2, GROUND + 4, obstacle.width / 2, 8, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.fillStyle = '#1e6b37'
+    ctx.beginPath()
+    ctx.roundRect(x + 13, y + 16, obstacle.width - 26, obstacle.height - 12, 8)
+    ctx.fill()
+
+    ctx.fillStyle = green
+    ctx.beginPath()
+    ctx.roundRect(x + 8, y + 3, obstacle.width - 16, 22, 8)
+    ctx.roundRect(x + 18, y + 18, obstacle.width - 36, obstacle.height - 18, 8)
+    ctx.fill()
+
+    ctx.fillStyle = '#0f3c2c'
+    ctx.beginPath()
+    ctx.roundRect(x + 24, y + 24, obstacle.width - 48, obstacle.height - 24, 9)
+    ctx.fill()
+
+    ctx.fillStyle = 'rgba(248, 243, 231, 0.38)'
+    ctx.fillRect(x + 19, y + 7, 8, 15)
+    ctx.fillRect(x + 29, y + 21, 7, obstacle.height - 25)
+    ctx.fillStyle = '#f8d77c'
+    ctx.fillRect(x + obstacle.width - 25, y + 7, 7, 5)
+
+    drawTinyTurtle(x + 14 + turtleWalk, GROUND - 7, 0.68, 1, phase)
+    drawTinyTurtle(x + obstacle.width - 24 + topTurtleWalk, y + 1, 0.58, -1, phase + 1.7)
+  }
+
+  function drawTinyTurtle(x, y, scale, direction, phase) {
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.scale(scale * direction, scale)
+
+    ctx.fillStyle = '#2f8a55'
+    ctx.beginPath()
+    ctx.ellipse(0, 0, 17, 10, 0, Math.PI, Math.PI * 2)
+    ctx.lineTo(17, 7)
+    ctx.lineTo(-17, 7)
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.fillStyle = '#f0c46b'
+    ctx.beginPath()
+    ctx.ellipse(18, 1, 6, 5, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillRect(-12, 5 + Math.sin(phase) * 2, 5, 7)
+    ctx.fillRect(6, 5 - Math.sin(phase) * 2, 5, 7)
+
+    ctx.fillStyle = '#102018'
+    ctx.fillRect(20, -1, 2, 2)
+    ctx.restore()
   }
 
   function drawRemotePlayers() {

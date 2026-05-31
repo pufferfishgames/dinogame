@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   REALTIME_CHANNEL,
+  REALTIME_MAX_BUFFERED_AMOUNT,
   REALTIME_SEND_INTERVAL_MS,
   createRealtimeMesh,
   createRealtimeUpdate,
@@ -12,6 +13,7 @@ import {
 describe('WebRTC realtime helpers', () => {
   it('uses a low realtime send interval for sub-5ms latency', () => {
     expect(REALTIME_SEND_INTERVAL_MS).toBeLessThanOrEqual(5)
+    expect(REALTIME_MAX_BUFFERED_AMOUNT).toBe(0)
   })
 
   it('chooses one deterministic offerer for each peer pair', () => {
@@ -225,5 +227,36 @@ describe('WebRTC realtime helpers', () => {
     })
 
     expect(messages).toMatchObject([{ pubkey: 'a', name: 'ALICE', score: 100 }])
+  })
+
+  it('drops outbound state frames when a data channel already has queued bytes', () => {
+    class FakePeerConnection {
+      constructor() {}
+      close() {}
+    }
+
+    const mesh = createRealtimeMesh({
+      localPubkey: 'b',
+      publishSignal() {},
+      RTCPeerConnectionImpl: FakePeerConnection,
+    })
+
+    mesh.updatePlayers([{ pubkey: 'a' }, { pubkey: 'b' }])
+    const peer = [...mesh.peers.values()][0]
+    const channel = {
+      readyState: 'open',
+      bufferedAmount: 24,
+      sent: [],
+      send(message) { this.sent.push(message) },
+      close() {},
+    }
+    peer.pc.ondatachannel({ channel })
+
+    expect(mesh.broadcast({ name: 'BOB', score: 1 })).toBe(0)
+    expect(channel.sent).toEqual([])
+
+    channel.bufferedAmount = 0
+    expect(mesh.broadcast({ name: 'BOB', score: 2 })).toBe(1)
+    expect(channel.sent).toHaveLength(1)
   })
 })

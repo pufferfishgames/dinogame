@@ -6,6 +6,7 @@ import {
   ROUND_DURATION_SECONDS,
   SPEED_ACCELERATION,
   createRunnerState,
+  estimateFinishDistance,
   getRunnerSnapshot,
   isColliding,
   jump,
@@ -34,12 +35,23 @@ describe('runner simulation', () => {
     expect([...seenTypes].sort()).toEqual(OBSTACLE_TYPES.map((obstacle) => obstacle.type).sort())
   })
 
-  it('includes crocodiles, chairs, and pine trees in the barrier roster', () => {
+  it('includes crocodiles, chairs, pine trees, and tunnels in the barrier roster', () => {
     expect(OBSTACLE_TYPES.map((obstacle) => obstacle.type)).toEqual(expect.arrayContaining([
       'crocodile',
       'chair',
       'pine-tree',
+      'tunnel',
     ]))
+  })
+
+  it('avoids immediate repeated obstacle types for better track variety', () => {
+    const state = createRunnerState({ seed: 42 })
+    const adjacentPairs = state.obstacles.slice(1).map((obstacle, index) => [
+      state.obstacles[index].type,
+      obstacle.type,
+    ])
+
+    expect(adjacentPairs.every(([left, right]) => left !== right)).toBe(true)
   })
 
   it('advances score and speed while alive', () => {
@@ -153,6 +165,15 @@ describe('runner simulation', () => {
     expect(state.finished).toBe(true)
     expect(state.elapsed).toBe(ROUND_DURATION_SECONDS)
     expect(afterFinish.distance).toBe(finishedDistance)
+  })
+
+  it('estimates the finish marker from the current runner pace', () => {
+    const early = estimateFinishDistance({ distance: 0, speed: INITIAL_SPEED, elapsed: 0 })
+    const late = estimateFinishDistance({ distance: 20_000, speed: 640, elapsed: 59 })
+
+    expect(early).toBeGreaterThan(20_000)
+    expect(late - 20_000).toBeLessThan(700)
+    expect(estimateFinishDistance({ distance: 24_000, speed: 640, elapsed: ROUND_DURATION_SECONDS })).toBe(24_000)
   })
 
   it.each([1, 42, 12345])(

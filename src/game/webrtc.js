@@ -1,6 +1,7 @@
 import { normalizePlayerName } from './player.js'
 
 export const REALTIME_SEND_INTERVAL_MS = 1
+export const REALTIME_MAX_BUFFERED_AMOUNT = 0
 export const REALTIME_CHANNEL = 'dinogame-state-v1'
 
 const DEFAULT_ICE_SERVERS = [
@@ -165,6 +166,8 @@ class RealtimeMesh {
     let sent = 0
     for (const peer of this.peers.values()) {
       if (peer.channel?.readyState === 'open') {
+        const bufferedAmount = Math.max(0, Number(peer.channel.bufferedAmount) || 0)
+        if (bufferedAmount > REALTIME_MAX_BUFFERED_AMOUNT) continue
         try {
           peer.channel.send(payload)
           sent += 1
@@ -244,6 +247,7 @@ class RealtimeMesh {
 
   setupChannel(peer, channel) {
     peer.channel = channel
+    if ('bufferedAmountLowThreshold' in channel) channel.bufferedAmountLowThreshold = REALTIME_MAX_BUFFERED_AMOUNT
     channel.onopen = () => this.emitStatus()
     channel.onclose = () => this.emitStatus()
     channel.onerror = () => this.emitStatus()

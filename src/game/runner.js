@@ -28,17 +28,20 @@ export const OBSTACLE_TYPES = [
   { type: 'crocodile', width: 76, height: 24 },
   { type: 'chair', width: 42, height: 46 },
   { type: 'pine-tree', width: 48, height: 62 },
+  { type: 'tunnel', width: 92, height: 56 },
 ]
 
 export function createRunnerState({ seed = 1 } = {}) {
   let randomSeed = seed >>> 0 || 1
   let nextX = FIRST_OBSTACLE_X
+  let lastObstacleType = ''
   const obstacles = []
 
   for (let i = 0; i < 24; i += 1) {
-    const generated = generateObstacle(randomSeed, nextX, i)
+    const generated = generateObstacle(randomSeed, nextX, i, lastObstacleType)
     randomSeed = generated.seed
     nextX = generated.nextX
+    lastObstacleType = generated.obstacle.type
     obstacles.push(generated.obstacle)
   }
 
@@ -46,6 +49,7 @@ export function createRunnerState({ seed = 1 } = {}) {
     seed: seed >>> 0 || 1,
     randomSeed,
     nextX,
+    lastObstacleType,
     obstacleCount: obstacles.length,
     elapsed: 0,
     distance: 0,
@@ -100,15 +104,17 @@ export function stepRunner(state, dt) {
 
   let randomSeed = state.randomSeed
   let nextX = state.nextX
+  let lastObstacleType = state.lastObstacleType ?? state.obstacles.at(-1)?.type ?? ''
   let obstacleCount = state.obstacleCount ?? state.obstacles.length
   let obstacles = state.obstacles
     .map((obstacle) => ({ ...obstacle, x: obstacle.x - speed * cappedDt }))
     .filter((obstacle) => obstacle.x + obstacle.width > -40)
 
   while ((obstacles.at(-1)?.x ?? 0) < TRACK_WIDTH) {
-    const generated = generateObstacle(randomSeed, nextX, obstacleCount)
+    const generated = generateObstacle(randomSeed, nextX, obstacleCount, lastObstacleType)
     randomSeed = generated.seed
     nextX = generated.nextX
+    lastObstacleType = generated.obstacle.type
     obstacleCount += 1
     obstacles = [...obstacles, { ...generated.obstacle, x: generated.obstacle.x - distance }]
   }
@@ -122,6 +128,7 @@ export function stepRunner(state, dt) {
     ...state,
     randomSeed,
     nextX,
+    lastObstacleType,
     obstacleCount,
     elapsed,
     distance,
@@ -194,17 +201,30 @@ export function obstacleGapRangeForComplexity(complexity) {
   }
 }
 
-function generateObstacle(seed, x, index = 0) {
+export function estimateFinishDistance({
+  distance = 0,
+  speed = INITIAL_SPEED,
+  elapsed = 0,
+} = {}) {
+  const remaining = Math.max(0, ROUND_DURATION_SECONDS - (Number(elapsed) || 0))
+  const currentDistance = Math.max(0, Number(distance) || 0)
+  const currentSpeed = Math.max(0, Number(speed) || 0)
+  return currentDistance + currentSpeed * remaining + 0.5 * SPEED_ACCELERATION * remaining * remaining
+}
+
+function generateObstacle(seed, x, index = 0, previousType = '') {
   let random = nextRandom(seed)
   const complexity = Math.max(obstacleComplexityForX(x), clamp(index / 46, 0, 1))
-  const type = pickObstacleType(random.value, complexity)
+  const type = pickObstacleType(random.value, complexity, previousType)
   random = nextRandom(random.seed)
-  const variant = Math.floor(random.value * 4)
+  const variant = Math.floor(random.value * 8)
   random = nextRandom(random.seed)
   const range = obstacleGapRangeForComplexity(complexity)
   let gap = range.min + random.value * (range.max - range.min)
   random = nextRandom(random.seed)
   gap += (random.value - 0.5) * MAX_GAP_JITTER
+  random = nextRandom(random.seed)
+  gap += (random.value - 0.5) * MAX_GAP_JITTER * 0.35
   gap = clamp(gap, LATE_MIN_OBSTACLE_GAP, EARLY_MAX_OBSTACLE_GAP)
 
   return {
@@ -214,12 +234,13 @@ function generateObstacle(seed, x, index = 0) {
       ...type,
       complexity,
       variant,
+      motionOffset: random.value,
       x,
     },
   }
 }
 
-function pickObstacleType(value, complexity) {
+function pickObstacleType(value, complexity, previousType = '') {
   const late = clamp(complexity, 0, 1)
   const weights = [
     [OBSTACLE_TYPES[0], 0.22 + late * 0.05],
@@ -229,7 +250,11 @@ function pickObstacleType(value, complexity) {
     [OBSTACLE_TYPES[4], 0.08 + late * 0.08],
     [OBSTACLE_TYPES[5], 0.12],
     [OBSTACLE_TYPES[6], 0.09 + late * 0.02],
-  ]
+    [OBSTACLE_TYPES[7], 0.08 + late * 0.08],
+  ].map(([obstacle, weight]) => [
+    obstacle,
+    obstacle.type === previousType ? 0 : weight,
+  ])
   const total = weights.reduce((sum, [, weight]) => sum + weight, 0)
   let threshold = value * total
 
