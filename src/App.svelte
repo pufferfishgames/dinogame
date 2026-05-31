@@ -10,6 +10,7 @@
   import { connectionLabel, connectionTone } from './game/connectivity.js'
   import { normalizeEditablePlayerName, normalizePlayerName } from './game/player.js'
   import { getOrCreateSessionPassphrase } from './game/joining.js'
+  import { buildRemotePlayerSprites } from './game/remotePlayers.js'
   import { createRunnerState, jump, stepRunner } from './game/runner.js'
   import { passphraseToPrivkey, privkeyToPubkey, randomPassphrase } from './nostr/identity.js'
   import {
@@ -51,6 +52,12 @@
   $: canStart = joined && lobby.phase !== 'countdown'
   $: localPlayer = competitors.find((player) => player.pubkey === pubkey)
   $: currentScore = runner.score
+  $: remotePlayerSprites = buildRemotePlayerSprites({
+    players: competitors,
+    localPubkey: pubkey,
+    localScore: currentScore,
+    trackWidth: VIEW_WIDTH,
+  })
   $: waitingForPlayers = joined && competitors.length < 2 && lobby.phase === 'idle' && relayStatus === 'connecting'
   $: relayLabel = connectionLabel(relayStatus, joined)
   $: relayTone = connectionTone(relayStatus, joined)
@@ -302,6 +309,7 @@
     drawSky()
     drawGround()
     drawObstacles()
+    drawRemotePlayers()
     drawDino()
     drawHud()
   }
@@ -360,6 +368,45 @@
         ctx.fill()
       }
     }
+  }
+
+  function drawRemotePlayers() {
+    for (const sprite of remotePlayerSprites) {
+      drawRemoteDino(sprite)
+      drawNameTag(sprite)
+    }
+  }
+
+  function drawRemoteDino(sprite) {
+    ctx.save()
+    ctx.globalAlpha = sprite.state === 'crashed' ? 0.5 : 0.78
+    ctx.fillStyle = '#315a86'
+    ctx.fillRect(sprite.x + 4, sprite.y + 12, 26, 24)
+    ctx.fillRect(sprite.x + 20, sprite.y + 2, 22, 18)
+    ctx.fillRect(sprite.x, sprite.y + 27, 12, 8)
+    ctx.fillRect(sprite.x + 10, sprite.y + 35, 7, 10)
+    ctx.fillRect(sprite.x + 28, sprite.y + 35, 7, 10)
+    ctx.fillStyle = '#f8f3e7'
+    ctx.fillRect(sprite.x + 36, sprite.y + 8, 4, 4)
+    ctx.fillStyle = '#93d0c2'
+    ctx.fillRect(sprite.x + 42, sprite.y + 13, 8, 4)
+    ctx.restore()
+  }
+
+  function drawNameTag(sprite) {
+    ctx.save()
+    ctx.font = '800 13px ui-monospace, SFMono-Regular, Menlo, monospace'
+    ctx.textAlign = 'center'
+    const labelWidth = Math.max(44, ctx.measureText(sprite.name).width + 12)
+    const x = Math.max(labelWidth / 2 + 6, Math.min(VIEW_WIDTH - labelWidth / 2 - 6, sprite.x + sprite.width / 2))
+    const y = Math.max(20, sprite.y - 10)
+    ctx.fillStyle = 'rgba(16, 32, 24, 0.76)'
+    ctx.beginPath()
+    ctx.roundRect(x - labelWidth / 2, y - 14, labelWidth, 19, 5)
+    ctx.fill()
+    ctx.fillStyle = '#f8f3e7'
+    ctx.fillText(sprite.name, x, y)
+    ctx.restore()
   }
 
   function drawDino() {
