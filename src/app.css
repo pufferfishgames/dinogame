@@ -6,6 +6,7 @@
     sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
 }
 
 * {
@@ -18,6 +19,14 @@ body {
   margin: 0;
   background:
     linear-gradient(180deg, #d7e7ed 0%, #f1ede4 48%, #e1d0ae 100%);
+  overflow-x: hidden;
+  overscroll-behavior: none;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
 }
 
 button,
@@ -134,6 +143,49 @@ h2 {
   display: block;
   background: #c6e6ef;
   touch-action: manipulation;
+}
+
+.game-shell.race-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100dvw;
+  height: 100dvh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #f6efe1;
+  touch-action: none;
+}
+
+.game-shell.race-fullscreen .stage {
+  width: 100dvw;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #f6efe1;
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.game-shell.race-fullscreen .title-row,
+.game-shell.race-fullscreen .controls-row,
+.game-shell.race-fullscreen .side-panel {
+  display: none;
+}
+
+.game-shell.race-fullscreen .runner-canvas {
+  width: 100dvw;
+  height: 100dvh;
+  aspect-ratio: auto;
+  background: #f6efe1;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .controls-row {

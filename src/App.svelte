@@ -41,10 +41,12 @@
   const VIEW_HEIGHT = 360
   const GROUND = 285
 
+  let gameShell
   let canvas
   let ctx
   let frame = 0
   let lastFrame = 0
+  let raceFullscreen = false
   let joined = false
   let playerName = ''
   let privkey = ''
@@ -86,6 +88,7 @@
   $: relayLabel = connectionLabel(relayStatus, joined)
   $: relayTone = connectionTone(relayStatus, joined)
   $: liveLabel = realtimePeers > 0 ? `P2P ${realtimePeers}` : relayLabel
+  $: winningPubkey = lobby.phase === 'racing' || runner.finished ? rankedPlayers[0]?.pubkey ?? '' : ''
   $: countdown = lobby.race && lobby.phase === 'countdown'
     ? Math.max(0, Math.ceil((lobby.race.startAt - Date.now()) / 1000))
     : 0
@@ -98,6 +101,8 @@
     ctx = canvas.getContext('2d')
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
     window.addEventListener('keydown', handleKeydown)
     canvas.addEventListener('pointerdown', handleJump)
     refreshScores()
@@ -106,6 +111,8 @@
     return () => {
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', resizeCanvas)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
       window.removeEventListener('keydown', handleKeydown)
       canvas.removeEventListener('pointerdown', handleJump)
       closeSession()
@@ -238,12 +245,14 @@
     const result = startRace(lobby, pubkey, Date.now())
     if (!result.started) return
 
+    enterRaceFullscreen({ requestBrowserFullscreen: true })
     applyIncomingRace(result.lobby.race)
     publishSession('start', 'countdown', result.lobby.race)
   }
 
   function applyIncomingRace(race) {
     if (!shouldApplyRaceStart(lobby, race, Date.now())) return
+    enterRaceFullscreen()
     lobby = applyRace(lobby, race, Date.now())
     runner = createRunnerState({ seed: race.seed })
     latestSubmittedRace = ''
@@ -341,6 +350,7 @@
       }
       if (next.finished) {
         localFinishedAt = Date.now()
+        leaveRaceFullscreen()
         publishPresence('finished')
       }
     }
@@ -416,18 +426,60 @@
     }
   }
 
+  function enterRaceFullscreen({ requestBrowserFullscreen = false } = {}) {
+    raceFullscreen = true
+    window.setTimeout(resizeCanvas, 0)
+
+    if (!requestBrowserFullscreen || !gameShell) return
+
+    const request = gameShell.requestFullscreen ?? gameShell.webkitRequestFullscreen
+    try {
+      request?.call(gameShell)
+    } catch {
+      // CSS fullscreen remains active when mobile browsers reject Fullscreen API calls.
+    }
+  }
+
+  function leaveRaceFullscreen() {
+    raceFullscreen = false
+    const fullscreenElement = document.fullscreenElement ?? document.webkitFullscreenElement
+    if (fullscreenElement === gameShell) {
+      const exit = document.exitFullscreen ?? document.webkitExitFullscreen
+      try {
+        exit?.call(document)
+      } catch {
+        // The browser may already be leaving fullscreen.
+      }
+    }
+    window.setTimeout(resizeCanvas, 0)
+  }
+
+  function handleFullscreenChange() {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && runner.finished) {
+      raceFullscreen = false
+      window.setTimeout(resizeCanvas, 0)
+    }
+  }
+
   function resizeCanvas() {
     const ratio = window.devicePixelRatio || 1
     const rect = canvas.getBoundingClientRect()
     canvas.width = Math.max(1, Math.floor(rect.width * ratio))
     canvas.height = Math.max(1, Math.floor(rect.height * ratio))
     ctx = canvas.getContext('2d')
-    ctx.setTransform(canvas.width / VIEW_WIDTH, 0, 0, canvas.height / VIEW_HEIGHT, 0, 0)
     draw()
   }
 
   function draw() {
     if (!ctx) return
+    const scale = Math.min(canvas.width / VIEW_WIDTH, canvas.height / VIEW_HEIGHT)
+    const offsetX = (canvas.width - VIEW_WIDTH * scale) / 2
+    const offsetY = (canvas.height - VIEW_HEIGHT * scale) / 2
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.fillStyle = '#f6efe1'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY)
     ctx.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
     drawSky()
     drawGround()
@@ -467,6 +519,13 @@
     ctx.beginPath()
     ctx.arc(835, 72, 31, 0, Math.PI * 2)
     ctx.fill()
+
+    drawBackgroundFade()
+  }
+
+  function drawBackgroundFade() {
+    ctx.fillStyle = 'rgba(248, 243, 231, 0.36)'
+    ctx.fillRect(0, 0, VIEW_WIDTH, GROUND)
   }
 
   function drawCity() {
@@ -578,16 +637,16 @@
   }
 
   function drawGround() {
-    ctx.fillStyle = '#264a33'
+    ctx.fillStyle = '#536d46'
     ctx.fillRect(0, GROUND, VIEW_WIDTH, 10)
-    ctx.fillStyle = '#8f7144'
+    ctx.fillStyle = '#a48d66'
     ctx.fillRect(0, GROUND + 10, VIEW_WIDTH, VIEW_HEIGHT - GROUND - 10)
-    ctx.fillStyle = '#c8b46c'
+    ctx.fillStyle = 'rgba(236, 217, 151, 0.62)'
     for (let x = -30; x < VIEW_WIDTH; x += 118) {
       ctx.fillRect(x + ((runner.distance / 8) % 118), GROUND + 34, 38, 4)
       ctx.fillRect(x + 72 + ((runner.distance / 8) % 118), GROUND + 58, 24, 3)
     }
-    ctx.fillStyle = '#d95f43'
+    ctx.fillStyle = 'rgba(217, 95, 67, 0.58)'
     for (let x = -20; x < VIEW_WIDTH; x += 88) {
       ctx.fillRect(x + ((runner.distance / 7) % 88), GROUND + 24, 46, 5)
     }
@@ -796,17 +855,13 @@
 
   function drawRemoteDino(sprite) {
     ctx.save()
-    ctx.globalAlpha = sprite.state === 'crashed' ? 0.5 : 0.78
-    ctx.fillStyle = '#315a86'
-    ctx.fillRect(sprite.x + 4, sprite.y + 12, 26, 24)
-    ctx.fillRect(sprite.x + 20, sprite.y + 2, 22, 18)
-    ctx.fillRect(sprite.x, sprite.y + 27, 12, 8)
-    ctx.fillRect(sprite.x + 10, sprite.y + 35, 7, 10)
-    ctx.fillRect(sprite.x + 28, sprite.y + 35, 7, 10)
-    ctx.fillStyle = '#f8f3e7'
-    ctx.fillRect(sprite.x + 36, sprite.y + 8, 4, 4)
-    ctx.fillStyle = '#93d0c2'
-    ctx.fillRect(sprite.x + 42, sprite.y + 13, 8, 4)
+    ctx.globalAlpha = sprite.state === 'crashed' ? 0.5 : 0.9
+    drawChromeDinoShape(sprite.x, sprite.y, {
+      color: '#315a86',
+      accent: '#93d0c2',
+      scale: 0.82,
+      hat: sprite.pubkey === winningPubkey,
+    })
     ctx.restore()
   }
 
@@ -836,16 +891,69 @@
     ctx.rotate((tilt * Math.PI) / 180)
     ctx.translate(-22, -24)
 
-    ctx.fillStyle = runner.alive ? '#243f32' : '#7c2f2f'
-    ctx.fillRect(6, 12, 30, 28)
-    ctx.fillRect(24, 0, 26, 22)
-    ctx.fillRect(0, 28, 12, 9)
-    ctx.fillRect(12, 38, 8, 12)
-    ctx.fillRect(30, 38, 8, 12)
+    drawChromeDinoShape(0, 0, {
+      color: runner.alive ? '#243f32' : '#7c2f2f',
+      accent: '#d95f43',
+      hat: winningPubkey === pubkey,
+    })
+    ctx.restore()
+  }
+
+  function drawChromeDinoShape(x, y, {
+    color = '#243f32',
+    accent = '#d95f43',
+    scale = 1,
+    hat = false,
+  } = {}) {
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.scale(scale, scale)
+
+    ctx.fillStyle = color
+    ctx.fillRect(17, 17, 25, 20)
+    ctx.fillRect(31, 8, 17, 18)
+    ctx.fillRect(45, 12, 12, 7)
+    ctx.fillRect(34, 22, 8, 10)
+    ctx.fillRect(9, 24, 12, 7)
+    ctx.fillRect(6, 27, 8, 6)
+    ctx.fillRect(13, 34, 8, 12)
+    ctx.fillRect(35, 34, 8, 12)
+    ctx.fillRect(10, 44, 13, 5)
+    ctx.fillRect(34, 44, 12, 5)
+    ctx.fillRect(42, 27, 8, 4)
+
     ctx.fillStyle = '#f8f3e7'
-    ctx.fillRect(42, 7, 4, 4)
+    ctx.fillRect(43, 11, 3, 3)
+    ctx.fillStyle = accent
+    ctx.fillRect(50, 18, 7, 3)
+
+    if (hat) drawBirthdayHat(36, 7, 1)
+
+    ctx.restore()
+  }
+
+  function drawBirthdayHat(x, y, scale = 1) {
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.scale(scale, scale)
+
+    ctx.fillStyle = '#f8d77c'
+    ctx.beginPath()
+    ctx.moveTo(0, 10)
+    ctx.lineTo(8, -9)
+    ctx.lineTo(17, 10)
+    ctx.closePath()
+    ctx.fill()
+
     ctx.fillStyle = '#d95f43'
-    ctx.fillRect(50, 12, 10, 5)
+    ctx.fillRect(3, 6, 13, 3)
+    ctx.fillStyle = '#35a9b8'
+    ctx.fillRect(6, 0, 8, 3)
+    ctx.fillStyle = '#f8f3e7'
+    ctx.beginPath()
+    ctx.arc(8, -10, 3, 0, Math.PI * 2)
+    ctx.fill()
+
     ctx.restore()
   }
 
@@ -904,7 +1012,7 @@
   }
 </script>
 
-<main class="game-shell">
+<main bind:this={gameShell} class="game-shell" class:race-fullscreen={raceFullscreen}>
   <section class="stage">
     <div class="title-row">
       <div>
