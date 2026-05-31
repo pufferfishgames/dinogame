@@ -1,5 +1,4 @@
 const FULLSCREEN_DINO_X_RATIO = 0.18
-const FULLSCREEN_GROUND_Y_RATIO = 0.82
 const PORTRAIT_GROUND_Y_RATIO = 0.6
 
 export function calculateCanvasTransform({
@@ -11,16 +10,7 @@ export function calculateCanvasTransform({
   fullscreen,
   dinoX,
 }) {
-  if (!fullscreen) {
-    const scale = Math.min(canvasWidth / viewWidth, canvasHeight / viewHeight)
-    return {
-      scale,
-      offsetX: (canvasWidth - viewWidth * scale) / 2,
-      offsetY: (canvasHeight - viewHeight * scale) / 2,
-    }
-  }
-
-  if (canvasHeight > canvasWidth) {
+  if (fullscreen && canvasHeight > canvasWidth) {
     const visibleWidth = landscapeVisibleWidth(canvasWidth, canvasHeight, viewWidth, viewHeight)
     const scale = canvasWidth / visibleWidth
     const minX = Math.min(0, canvasWidth - viewWidth * scale)
@@ -34,16 +24,13 @@ export function calculateCanvasTransform({
     }
   }
 
-  const scale = Math.max(canvasWidth / viewWidth, canvasHeight / viewHeight)
-  const minX = Math.min(0, canvasWidth - viewWidth * scale)
-  const minY = Math.min(0, canvasHeight - viewHeight * scale)
-  const targetDinoX = canvasWidth * FULLSCREEN_DINO_X_RATIO
-  const targetGroundY = canvasHeight * FULLSCREEN_GROUND_Y_RATIO
-
+  // Non-fullscreen and landscape fullscreen both use contain scaling so the
+  // full track width is always visible, centred within the canvas.
+  const scale = Math.min(canvasWidth / viewWidth, canvasHeight / viewHeight)
   return {
     scale,
-    offsetX: clamp(targetDinoX - dinoX * scale, minX, 0),
-    offsetY: clamp(targetGroundY - ground * scale, minY, 0),
+    offsetX: (canvasWidth - viewWidth * scale) / 2,
+    offsetY: (canvasHeight - viewHeight * scale) / 2,
   }
 }
 

@@ -48,7 +48,7 @@ describe('mobile layout css', () => {
   })
 
   it('draws a birthday hat on the leading Chrome-style dinosaur', () => {
-    expect(app).toContain('winningPubkey')
+    expect(app).toContain('stableWinnerPubkey')
     expect(app).toContain('drawBirthdayHat')
     expect(app).toContain('drawChromeDinoShape')
   })

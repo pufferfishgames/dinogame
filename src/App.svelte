@@ -78,6 +78,9 @@
   let realtimeSeq = 0
   let realtimePeers = 0
   let remoteSmoothingState = new Map()
+  let stableWinnerPubkey = ''
+  let leaderCandidatePubkey = ''
+  let leaderCandidateSince = 0
 
   $: competitors = lobby.players
   $: localDisplayName = normalizePlayerName(playerName)
@@ -108,9 +111,6 @@
   $: relayLabel = connectionLabel(relayStatus, joined)
   $: relayTone = connectionTone(relayStatus, joined)
   $: liveLabel = realtimePeers > 0 ? `P2P ${realtimePeers}` : relayLabel
-  $: winningPlayer = lobby.phase === 'racing' || runner.finished ? rankedPlayers[0] : null
-  $: winningPubkey = winningPlayer?.pubkey ?? ''
-  $: localIsWinning = Boolean(winningPlayer && isLocalPlayer(winningPlayer))
   $: countdown = lobby.race && lobby.phase === 'countdown'
     ? Math.max(0, Math.ceil((lobby.race.startAt - Date.now()) / 1000))
     : 0
@@ -389,6 +389,19 @@
     publishPresence('racing')
   }
 
+  function updateStableWinner() {
+    const isActive = lobby.phase === 'racing' || runner.finished
+    const candidate = isActive ? (rankedPlayers[0]?.pubkey ?? '') : ''
+    const now = Date.now()
+    if (candidate !== leaderCandidatePubkey) {
+      leaderCandidatePubkey = candidate
+      leaderCandidateSince = now
+    }
+    if (candidate === '' || now - leaderCandidateSince >= 600) {
+      stableWinnerPubkey = candidate
+    }
+  }
+
   function tick(now) {
     const dt = Math.min((now - lastFrame) / 1000 || 0, 0.05)
     lastFrame = now
@@ -420,6 +433,7 @@
       maybeSubmitRacePoints()
     }
 
+    updateStableWinner()
     draw()
     frame = requestAnimationFrame(tick)
   }
@@ -1019,7 +1033,7 @@
       color: sprite.color,
       accent: sprite.accent,
       scale: 0.82,
-      hat: sprite.pubkey === winningPubkey,
+      hat: sprite.pubkey === stableWinnerPubkey,
     })
     ctx.restore()
   }
@@ -1053,7 +1067,7 @@
     drawChromeDinoShape(0, 0, {
       color: runner.alive ? localPlayerColor.body : '#7c2f2f',
       accent: localPlayerColor.accent,
-      hat: localIsWinning,
+      hat: stableWinnerPubkey === pubkey,
     })
     ctx.restore()
   }
@@ -1152,6 +1166,11 @@
     ctx.fillStyle = '#102018'
     ctx.font = '700 24px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.fillText(`${String(secondsLeft).padStart(2, '0')}s`, 22, 38)
+
+    if (joined && lobby.phase === 'racing') {
+      ctx.font = '700 13px ui-monospace, SFMono-Regular, Menlo, monospace'
+      ctx.fillText(`${Math.round(runner.speed / 4)} km/h`, 22, 56)
+    }
 
     if (!joined) {
       return
